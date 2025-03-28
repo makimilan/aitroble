@@ -1,73 +1,3 @@
-# --- Пользовательский CSS (Финальная попытка темной темы) ---
-custom_css = f"""
-<style>
-    /* --- Базовая темная тема --- */
-    body {{ color: #dcddde; }} /* Светлый текст по умолчанию */
-    .stApp {{ background-color: #36393f; }} /* Темно-серый фон */
-
-    /* --- Убираем лишние отступы --- */
-     .main .block-container {{ padding: 1rem 1rem 4rem 1rem !important; }} /* Увеличил нижний отступ */
-
-    /* --- Поле ввода --- */
-    .stChatFloatingInputContainer {{ background-color: #40444b !important; border-top: 1px solid #2f3136 !important; }}
-    .stChatFloatingInputContainer textarea {{ background-color: #40444b !important; color: #dcddde !important; border: none !important; }}
-    .stChatFloatingInputContainer button[data-testid="send-button"] svg {{ fill: #7289da !important; }}
-
-    /* --- *СУПЕР ИСПРАВЛЕННЫЕ* Стили чата --- */
-    [data-testid="stChatMessage"] {{
-        background: none !important; /* Убираем фон */
-        border: none !important; /* Убираем границу */
-        box-shadow: none !important; /* Убираем тень */
-        padding: 0.25rem 0 !important; /* Вертикальные отступы */
-        margin-bottom: 0.75rem !important; /* Отступ между сообщениями */
-        max-width: 100%;
-    }}
-     /* Контейнер аватара и контента */
-     [data-testid="stChatMessage"] > div {{
-        display: flex;
-        align-items: flex-start; /* Выравниваем аватар и текст по верху */
-        gap: 0.75rem; /* Отступ между аватаром и текстом */
-     }}
-     /* Контейнер контента внутри сообщения */
-    [data-testid="stChatMessage"] .stChatMessageContent {{
-         background: none !important; /* Убираем фон */
-         color: #dcddde !important; /* Яркий текст */
-         padding: 0 !important; /* Убираем внутренние отступы */
-    }}
-    [data-testid="stChatMessage"] .stChatMessageContent p {{ margin-bottom: 0.2rem; }}
-
-    /* Аватары */
-    [data-testid="chatAvatarIcon-assistant"] svg,
-    [data-testid="chatAvatarIcon-user"] svg {{
-         color: #7289da; /* Цвет иконки аватара */
-         width: 1.75rem; /* Увеличим размер аватара */
-         height: 1.75rem;
-         margin-top: 2px; /* Небольшой отступ сверху для выравнивания */
-    }}
-
-    /* --- Темные блоки кода (без изменений) --- */
-    [data-testid="stChatMessage"] code {{ background-color: #282c34; color: #abb2bf; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; word-wrap: break-word; }}
-    [data-testid="stChatMessage"] pre {{ background-color: #282c34; border: 1px solid #3b4048; border-radius: 5px; padding: 12px; overflow-x: auto; font-size: 0.9em; }}
-    [data-testid="stChatMessage"] pre code {{ background-color: transparent; color: #abb2bf; padding: 0; font-size: inherit; border-radius: 0; }}
-
-    /* --- Стили Сайдбара (без изменений) --- */
-    [data-testid="stSidebar"] {{ background-color: #2f3136; padding: 1rem; }}
-    [data-testid="stSidebar"] h2 {{ text-align: center; margin-bottom: 1rem; font-size: 1.5rem; color: #ffffff; }}
-    [data-testid="stSidebar"] .stButton button {{ border-radius: 5px; width: 100%; margin-bottom: 0.5rem; background-color: #40444b; border: none; color: #dcddde; }}
-    [data-testid="stSidebar"] .stButton button:hover {{ background-color: #4f545c; }}
-    div[data-testid="stSidebar"] div[role="radiogroup"] > label {{ display: block; padding: 8px 12px; border-radius: 5px; margin-bottom: 5px; cursor: pointer; transition: background-color 0.2s ease; border: 1px solid transparent; color: #b9bbbe; }}
-    div[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {{ background-color: rgba(255, 255, 255, 0.05); }}
-    div[data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"]:checked + label {{ background-color: #3a3d43; border: 1px solid #3a3d43; font-weight: 500; color: #ffffff; }}
-    [data-testid="stSidebar"] .stRadio [data-testid="stWidgetLabel"] {{ color: #b9bbbe; font-size: 0.9rem; margin-bottom: 0.3rem; }}
-
-</style>
-"""
-
-# --- Весь остальной код Python остается БЕЗ ИЗМЕНЕНИЙ ---
-
-# ... (вставьте сюда весь остальной код Python из предыдущего ответа) ...
-
-# Вот он еще раз для полноты:
 # -*- coding: utf-8 -*-
 import streamlit as st
 import requests
@@ -88,13 +18,13 @@ MODES = {
     "DeepThink (R1)": "deepseek/deepseek-r1:free",
 }
 DEFAULT_MODE = "Стандарт (V3)"
-LOCAL_STORAGE_KEY = "multi_chat_storage_v6" # Ключ для localStorage
+LOCAL_STORAGE_KEY = "multi_chat_storage_v7" # Снова обновил ключ
 DEFAULT_CHAT_NAME = "Новый чат"
 
 # --- Настройка страницы ---
 st.set_page_config(
-    page_title="Чат с ИИ",
-    page_icon="💬",
+    page_title="Чат ИИ",
+    page_icon="🤖", # Сменил иконку
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -102,10 +32,91 @@ st.set_page_config(
 # --- Инициализация LocalStorage ---
 localS = LocalStorage()
 
-# --- Пользовательский CSS (ВСТАВЬТЕ ОБНОВЛЕННЫЙ БЛОК СЮДА) ---
-# custom_css = f""" ... """ # <--- Сюда вставляется CSS выше
-st.markdown(custom_css, unsafe_allow_html=True)
+# --- Пользовательский CSS (Чистая темная тема) ---
+custom_css = f"""
+<style>
+    /* --- Основные цвета --- */
+    :root {{
+        --bg-color: #1E1E1E; /* Почти черный фон */
+        --sidebar-bg-color: #191919; /* Чуть темнее для сайдбара */
+        --input-bg-color: #252526; /* Фон поля ввода и кнопок */
+        --text-color: #EAEAEA; /* Основной светлый текст */
+        --text-color-muted: #A0A0A0; /* Приглушенный текст */
+        --accent-color: #007AFF; /* Синий акцент (для выделения) */
+        --hover-bg-color: #333333; /* Фон при наведении */
+    }}
 
+    /* --- Глобальные стили --- */
+    body {{ color: var(--text-color); }}
+    .stApp {{ background-color: var(--bg-color); }}
+    .main .block-container {{ padding: 1rem 1rem 4rem 1rem !important; }} /* Отступы */
+
+    /* --- Поле ввода --- */
+    .stChatFloatingInputContainer {{
+        background-color: var(--input-bg-color) !important;
+        border-top: 1px solid var(--hover-bg-color) !important;
+    }}
+    .stChatFloatingInputContainer textarea {{
+        background-color: var(--input-bg-color) !important;
+        color: var(--text-color) !important;
+        border: none !important;
+    }}
+    .stChatFloatingInputContainer button[data-testid="send-button"] svg {{
+        fill: var(--accent-color) !important;
+    }}
+
+    /* --- Сообщения чата --- */
+    [data-testid="stChatMessage"] {{
+        background: none !important; border: none !important; box-shadow: none !important;
+        padding: 0.5rem 0 !important; margin-bottom: 1rem !important; max-width: 100%;
+    }}
+    [data-testid="stChatMessage"] > div {{ display: flex; align-items: flex-start; gap: 0.75rem; }}
+    [data-testid="stChatMessage"] .stChatMessageContent {{
+         background: none !important; color: var(--text-color) !important; padding: 0 !important;
+    }}
+    [data-testid="stChatMessage"] .stChatMessageContent p {{ margin-bottom: 0.2rem; line-height: 1.6; }} /* Улучшаем читаемость */
+
+    /* Аватары */
+    [data-testid="chatAvatarIcon-assistant"] svg,
+    [data-testid="chatAvatarIcon-user"] svg {{
+         color: var(--accent-color); width: 1.5rem; height: 1.5rem; margin-top: 3px;
+    }}
+
+    /* --- Темные блоки кода --- */
+    [data-testid="stChatMessage"] code {{ background-color: #2D2D2D; color: #CCCCCC; padding: 0.2em 0.4em; border-radius: 3px; font-size: 0.85em; word-wrap: break-word; }}
+    [data-testid="stChatMessage"] pre {{ background-color: #2D2D2D; border: 1px solid var(--hover-bg-color); border-radius: 5px; padding: 12px; overflow-x: auto; font-size: 0.85em; }}
+    [data-testid="stChatMessage"] pre code {{ background: none; color: #CCCCCC; padding: 0; font-size: inherit; border-radius: 0; }}
+
+    /* --- Стили Сайдбара --- */
+    [data-testid="stSidebar"] {{ background-color: var(--sidebar-bg-color); padding: 1rem; border-right: 1px solid var(--hover-bg-color); }}
+    [data-testid="stSidebar"] h2 {{ text-align: center; margin-bottom: 1rem; font-size: 1.4rem; color: #ffffff; }}
+    /* Кнопки в сайдбаре */
+    [data-testid="stSidebar"] .stButton button {{
+        border-radius: 5px; width: 100%; margin-bottom: 0.5rem; background-color: var(--input-bg-color);
+        border: 1px solid var(--hover-bg-color); color: var(--text-color); text-align: center;
+    }}
+    [data-testid="stSidebar"] .stButton button:hover {{ background-color: var(--hover-bg-color); border-color: var(--hover-bg-color); }}
+     /* Радио-кнопки */
+    div[data-testid="stSidebar"] div[role="radiogroup"] > label {{
+        display: block; padding: 8px 12px; border-radius: 5px; margin-bottom: 5px; cursor: pointer;
+        transition: background-color 0.2s ease, color 0.2s ease; border: 1px solid transparent; color: var(--text-color-muted);
+    }}
+    div[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {{ background-color: var(--hover-bg-color); color: var(--text-color); }}
+    /* Выбранный элемент радио */
+    div[data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"]:checked + label {{
+        background-color: var(--accent-color); border: 1px solid var(--accent-color);
+        font-weight: 500; color: #ffffff;
+    }}
+     /* Заголовок для радио выбора режима */
+     [data-testid="stSidebar"] .stRadio [data-testid="stWidgetLabel"] {{
+        color: var(--text-color-muted); font-size: 0.9rem; margin-bottom: 0.3rem; font-weight: bold;
+     }}
+     /* Разделители в сайдбаре */
+     [data-testid="stSidebar"] hr {{ background-color: var(--hover-bg-color); }}
+
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
 
 # --- Функции для работы с чатами (без изменений) ---
 def load_all_chats():
@@ -215,7 +226,7 @@ if not current_messages:
 chat_display_container = st.container()
 with chat_display_container:
     for message in current_messages:
-        avatar = "🧑‍💻" if message["role"] == "user" else "🐳"
+        avatar = "🧑‍💻" if message["role"] == "user" else "🤖" # Сменил аватара ассистента
         with st.chat_message(message["role"], avatar=avatar):
             st.markdown(message["content"])
 
@@ -267,7 +278,7 @@ if prompt := st.chat_input(f"Спроси {current_mode_name}..."):
 active_chat_history = st.session_state.all_chats.get(st.session_state.active_chat, [])
 if active_chat_history and active_chat_history[-1]["role"] == "user":
      with chat_display_container:
-         with st.chat_message("assistant", avatar="🐳"):
+         with st.chat_message("assistant", avatar="🤖"): # Сменил аватара
              full_response = st.write_stream(stream_ai_response(current_model_id, active_chat_history))
 
      if full_response:
