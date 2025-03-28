@@ -20,17 +20,16 @@ MODES = {
     "DeepThink (R1)": "deepseek/deepseek-r1:free",
 }
 DEFAULT_MODE = "Стандарт (V3)"
-LOCAL_STORAGE_KEY = "multi_chat_storage_v10" # Новый ключ
+LOCAL_STORAGE_KEY = "multi_chat_storage_v11" # Новый ключ
 DEFAULT_CHAT_NAME = "Новый чат"
-# УВЕЛИЧИВАЕМ ГЛУБИНУ ПОИСКА
-MAX_SEARCH_RESULTS_PER_QUERY = 8 # <<< Увеличено
-MAX_QUERIES_TO_GENERATE = 5       # <<< Увеличено
-MAX_SNIPPET_LENGTH = 250          # Ограничим длину сниппета для экономии контекста
+MAX_SEARCH_RESULTS_PER_QUERY = 5 # Снизим немного, т.к. поиск не всегда нужен
+MAX_QUERIES_TO_GENERATE = 3       # Снизим немного
+MAX_SNIPPET_LENGTH = 250
 
 # --- Настройка страницы ---
 st.set_page_config(
-    page_title="Супер Умный Чат ИИ", # Изменено
-    page_icon="💡",
+    page_title="Умный Чат ИИ",
+    page_icon="🧠", # Вернем иконку
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -56,7 +55,7 @@ custom_css = f"""
 st.markdown(custom_css, unsafe_allow_html=True)
 
 
-# --- Функции для работы с чатами (без изменений в логике, только улучшена стабильность) ---
+# --- Функции для работы с чатами (без изменений) ---
 def load_all_chats():
     # ... (код load_all_chats без изменений) ...
     data_str = localS.getItem(LOCAL_STORAGE_KEY)
@@ -70,12 +69,10 @@ def load_all_chats():
                 if data["active_chat"] not in data["chats"]: data["active_chat"] = list(data["chats"].keys())[0] if data["chats"] else None
                 if data["active_chat"] is None: raise ValueError("No active chat found after loading.")
                 return data["chats"], data["active_chat"]
-        except Exception as e:
-            print(f"Ошибка загрузки чатов: {e}. Возврат к стандартным.")
+        except Exception as e: print(f"Ошибка загрузки чатов: {e}.")
     first_chat_name = f"{DEFAULT_CHAT_NAME} 1"
     default_chats = {first_chat_name: []}
     return default_chats, first_chat_name
-
 
 def save_all_chats(chats_dict, active_chat_name):
     # ... (код save_all_chats без изменений) ...
@@ -87,80 +84,105 @@ def save_all_chats(chats_dict, active_chat_name):
         if active_chat_name not in cleaned_chats: active_chat_name = list(cleaned_chats.keys())[0] if cleaned_chats else None
         if active_chat_name is None: return False
         data_to_save = {"chats": cleaned_chats, "active_chat": active_chat_name}
-        try:
-            localS.setItem(LOCAL_STORAGE_KEY, json.dumps(data_to_save)); return True
-        except Exception as e:
-            print(f"Ошибка сохранения чатов: {e}")
-            st.error(f"Не удалось сохранить состояние чата: {e}")
-            return False
+        try: localS.setItem(LOCAL_STORAGE_KEY, json.dumps(data_to_save)); return True
+        except Exception as e: print(f"Ошибка сохранения чатов: {e}"); return False
     return False
-
 
 def generate_new_chat_name(existing_names):
     # ... (код generate_new_chat_name без изменений) ...
-    i = 1
-    while f"{DEFAULT_CHAT_NAME} {i}" in existing_names: i += 1
-    return f"{DEFAULT_CHAT_NAME} {i}"
+    i = 1; base_name = DEFAULT_CHAT_NAME
+    while f"{base_name} {i}" in existing_names: i += 1
+    return f"{base_name} {i}"
+
+# --- НОВАЯ Функция для принятия решения о поиске ---
+def should_perform_search(user_prompt, model_id):
+    """Определяет, нужен ли веб-поиск для ответа на запрос пользователя."""
+    try: api_key = st.secrets.get("OPENROUTER_API_KEY"); assert api_key
+    except: print("API ключ не найден для решения о поиске."); return False # По умолчанию - не искать
+
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    # Можно добавить Referer/Title, если нужно
+    # "HTTP-Referer": "...", "X-Title": "..."
+
+    # Очень простой промпт для быстрого ответа ДА/НЕТ
+    decision_prompt = f"""Проанализируй запрос пользователя. Требует ли он для точного ответа поиска актуальной информации в интернете (например, новости, текущие события, конкретные факты после 2023 года, информация о недавних изменениях)? Ответь одним словом: ДА или НЕТ.
+
+Запрос пользователя: "{user_prompt}"
+
+Ответ (ДА или НЕТ):"""
+
+    payload = {
+        "model": model_id, # Используем ту же модель для простоты
+        "messages": [{"role": "user", "content": decision_prompt}],
+        "max_tokens": 5, # Достаточно для "ДА" или "НЕТ"
+        "temperature": 0.1, # Максимально детерминированный ответ
+    }
+
+    try:
+        print(f"Решение о поиске для: '{user_prompt[:50]}...'")
+        response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=15) # Короткий таймаут
+        response.raise_for_status()
+        data = response.json()
+        decision = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip().upper()
+        print(f"  Решение ИИ: {decision}")
+        return decision == "ДА" # Возвращает True, если ответ "ДА"
+    except Exception as e:
+        print(f"  Ошибка при принятии решения о поиске: {e}")
+        return False # В случае ошибки - не искать
 
 # --- Функция генерации поисковых запросов (без изменений) ---
 def generate_search_queries(user_prompt, model_id):
     # ... (код generate_search_queries без изменений) ...
     try: api_key = st.secrets.get("OPENROUTER_API_KEY"); assert api_key
-    except: print("API ключ OpenRouter не найден."); return []
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "http://localhost:8501", "X-Title": "Streamlit Super Smart Chat AI"}
-    generation_prompt = f"""Проанализируй следующий запрос пользователя и определи основную суть вопроса. Сгенерируй до {MAX_QUERIES_TO_GENERATE} эффективных и лаконичных поисковых запросов (на русском языке), которые помогут найти самую релевантную и актуальную информацию в интернете для ответа на этот запрос. Выведи только сами запросы, каждый на новой строке, без нумерации или дополнительных пояснений. Запрос пользователя: "{user_prompt}" Поисковые запросы:"""
-    payload = {"model": model_id, "messages": [{"role": "user", "content": generation_prompt}], "max_tokens": 150, "temperature": 0.3}
+    except: print("API ключ не найден для генерации запросов."); return []
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "http://localhost:8501", "X-Title": "Streamlit Smart Chat AI"}
+    generation_prompt = f"""Проанализируй следующий запрос пользователя. Сгенерируй до {MAX_QUERIES_TO_GENERATE} эффективных и лаконичных поисковых запросов (на русском языке), которые помогут найти самую релевантную и актуальную информацию в интернете для ответа. Выведи только сами запросы, каждый на новой строке, без нумерации. Запрос пользователя: "{user_prompt}" Поисковые запросы:"""
+    payload = {"model": model_id, "messages": [{"role": "user", "content": generation_prompt}], "max_tokens": 100, "temperature": 0.3}
     generated_queries = []
     try:
         print(f"Генерация поисковых запросов для: '{user_prompt[:50]}...'")
         response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        response.raise_for_status(); data = response.json()
         raw_queries = data.get("choices", [{}])[0].get("message", {}).get("content", "")
         if raw_queries:
             queries = [q.strip() for q in raw_queries.split('\n') if q.strip()]
             queries = [re.sub(r"^\s*[\d\.\-\*]+\s*", "", q) for q in queries]
-            generated_queries = [q for q in queries if q]
-            print(f"Сгенерированные запросы: {generated_queries}")
-    except Exception as e: print(f"Ошибка при генерации поисковых запросов: {e}")
+            generated_queries = [q for q in queries if q]; print(f"  Сгенерированные запросы: {generated_queries}")
+    except Exception as e: print(f"  Ошибка при генерации поисковых запросов: {e}")
     return generated_queries[:MAX_QUERIES_TO_GENERATE]
 
 
-# --- МОДИФИЦИРОВАННАЯ Функция веб-поиска ---
+# --- Функция веб-поиска (без изменений, все еще без ссылок) ---
 def perform_web_search(queries: list, max_results_per_query=MAX_SEARCH_RESULTS_PER_QUERY):
-    """Выполняет веб-поиск по списку запросов и агрегирует результаты БЕЗ ССЫЛОК."""
+    # ... (код perform_web_search без изменений) ...
     all_results_text = ""
     if not queries: return "Не было сгенерировано поисковых запросов."
     print(f"Выполнение поиска по запросам ({len(queries)} шт.)...")
     aggregated_results = []
     try:
-        with DDGS(timeout=25) as ddgs: # Увеличим общий таймаут еще
+        with DDGS(timeout=25) as ddgs:
             for query_idx, query in enumerate(queries, 1):
-                print(f"  Запрос {query_idx}/{len(queries)}: '{query}' (max {max_results_per_query} рез.)...")
+                print(f"  Запрос {query_idx}/{len(queries)}: '{query}'...")
                 try:
                     search_results = list(ddgs.text(query, max_results=max_results_per_query))
-                    if search_results:
-                        aggregated_results.extend(search_results)
-                        print(f"    Найдено {len(search_results)} результатов.")
+                    if search_results: aggregated_results.extend(search_results); print(f"    Найдено {len(search_results)}.")
                     else: print(f"    Результатов не найдено.")
-                except Exception as e_inner: print(f"    Ошибка при поиске по запросу '{query}': {e_inner}")
+                except Exception as e_inner: print(f"    Ошибка при поиске '{query}': {e_inner}")
         if aggregated_results:
-            unique_results = {result.get('body', ''): result for result in aggregated_results if result.get('body')}.values() # Уникальность по тексту сниппета
-            print(f"Всего уникальных результатов после агрегации: {len(unique_results)}")
+            unique_results = {result.get('body', ''): result for result in aggregated_results if result.get('body')}.values()
+            print(f"Всего уникальных результатов: {len(unique_results)}")
             if unique_results:
                  all_results_text += "--- Результаты веб-поиска ---\n"
                  for i, result in enumerate(unique_results, 1):
                     title = result.get('title', 'Нет заголовка')
                     body = result.get('body', '')
-                    # Укорачиваем сниппет и УБИРАЕМ ССЫЛКУ
                     body_short = (body[:MAX_SNIPPET_LENGTH] + '...') if len(body) > MAX_SNIPPET_LENGTH else body
-                    all_results_text += f"{i}. {title}: {body_short}\n" # <<< ССЫЛКА УБРАНА
-            else: all_results_text = "Не найдено уникальных результатов после агрегации."
-        else: all_results_text = "По сгенерированным запросам ничего не найдено в сети."
+                    all_results_text += f"{i}. {title}: {body_short}\n"
+            else: all_results_text = "Не найдено уникальных результатов."
+        else: all_results_text = "По сгенерированным запросам ничего не найдено."
         return all_results_text.strip()
-    except Exception as e:
-        print(f"Общая ошибка веб-поиска: {e}")
-        return "Не удалось выполнить веб-поиск из-за ошибки."
+    except Exception as e: print(f"Общая ошибка веб-поиска: {e}"); return "Не удалось выполнить веб-поиск."
+
 
 # --- Инициализация состояния (без изменений) ---
 if "all_chats" not in st.session_state:
@@ -170,7 +192,8 @@ if "selected_mode" not in st.session_state:
 
 # --- Определяем активный чат (без изменений) ---
 active_chat_name = st.session_state.active_chat
-active_chat_history = list(st.session_state.all_chats.get(active_chat_name, []))
+# УБИРАЕМ логику добавления приветственного сообщения
+# active_chat_history = list(st.session_state.all_chats.get(active_chat_name, []))
 
 # --- Сайдбар (без изменений) ---
 with st.sidebar:
@@ -193,8 +216,7 @@ with st.sidebar:
                 remaining_chats = list(st.session_state.all_chats.keys())
                 st.session_state.active_chat = remaining_chats[0] if remaining_chats else None
                 if not st.session_state.active_chat: new_name = generate_new_chat_name([]); st.session_state.all_chats = {new_name: []}; st.session_state.active_chat = new_name
-                save_all_chats(st.session_state.all_chats, st.session_state.active_chat)
-                st.rerun()
+                save_all_chats(st.session_state.all_chats, st.session_state.active_chat); st.rerun()
     st.divider()
     mode_options = list(MODES.keys()); current_mode_index = mode_options.index(st.session_state.selected_mode) if st.session_state.selected_mode in mode_options else 0
     selected_mode_radio = st.radio("Режим работы:", options=mode_options, index=current_mode_index, key="mode_selector")
@@ -205,19 +227,18 @@ with st.sidebar:
 current_mode_name = st.session_state.get("selected_mode", DEFAULT_MODE)
 current_model_id = MODES.get(current_mode_name, MODES[DEFAULT_MODE])
 
-# Приветственное сообщение
-if not active_chat_history and active_chat_name in st.session_state.all_chats:
-     welcome_message = {"role": "assistant", "content": f"👋 Привет! Я {current_mode_name}, ваш супер-ассистент. Я могу искать актуальную информацию в сети. Спрашивайте!"}
-     st.session_state.all_chats[active_chat_name] = [welcome_message]
-     save_all_chats(st.session_state.all_chats, active_chat_name)
-     active_chat_history = [welcome_message]
+# УБИРАЕМ БЛОК ОТОБРАЖЕНИЯ ПРИВЕТСТВИЯ
+# if not active_chat_history and active_chat_name in st.session_state.all_chats:
+#      welcome_message = {"role": "assistant", "content": f"..."}
+#      ...
 
 # Отображение чата
 chat_display_container = st.container()
 with chat_display_container:
-    current_display_history = list(st.session_state.all_chats.get(active_chat_name, [])) # Свежая копия для отображения
+    # Всегда получаем самую свежую историю для отображения
+    current_display_history = list(st.session_state.all_chats.get(active_chat_name, []))
     for message in current_display_history:
-        avatar = "🧑‍💻" if message["role"] == "user" else "💡" # Сменим иконку ИИ
+        avatar = "🧑‍💻" if message["role"] == "user" else "🧠" # Иконка ИИ
         with st.chat_message(message["role"], avatar=avatar):
             st.markdown(message["content"], unsafe_allow_html=True)
 
@@ -226,13 +247,12 @@ def stream_ai_response(model_id_func, chat_history_func):
     # ... (код stream_ai_response без изменений) ...
     try: api_key = st.secrets.get("OPENROUTER_API_KEY"); assert api_key
     except: st.error("⛔ Секрет 'OPENROUTER_API_KEY' не найден.", icon="🚨"); yield None; return
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "http://localhost:8501", "X-Title": "Streamlit Super Smart Chat AI"}
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "http://localhost:8501", "X-Title": "Streamlit Smart Chat AI"}
     if not isinstance(chat_history_func, list): print("История чата не список."); yield None; return
     payload = {"model": model_id_func, "messages": chat_history_func, "stream": True}
     try:
         response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, stream=True, timeout=180)
-        response.raise_for_status()
-        has_content = False
+        response.raise_for_status(); has_content = False
         for line in response.iter_lines():
             if line:
                 decoded_line = line.decode('utf-8')
@@ -242,10 +262,10 @@ def stream_ai_response(model_id_func, chat_history_func):
                         if json_data.strip() == "[DONE]": break
                         chunk = json.loads(json_data)
                         delta = chunk.get("choices", [{}])[0].get("delta", {})
-                        if delta and "content" in delta: # Проверяем наличие контента
+                        if delta and "content" in delta:
                              delta_content = delta["content"]
                              if delta_content: has_content = True; yield delta_content
-                    except Exception as e: print(f"Ошибка обработки чанка: {e} | Строка: {decoded_line}"); continue # Логируем ошибку и продолжаем
+                    except Exception as e: print(f"Ошибка обработки чанка: {e}"); continue
         if not has_content: print("Стриминг завершился без контента.")
     except requests.exceptions.Timeout: st.error("⏳ Превышено время ожидания.", icon="⏱️"); print("Таймаут API."); yield None
     except requests.exceptions.RequestException as e: st.error(f"🌐 Ошибка сети: {e}", icon="💔"); print(f"Ошибка сети: {e}"); yield None
@@ -267,69 +287,84 @@ if current_chat_state and current_chat_state[-1]["role"] == "user":
 
     last_user_prompt = current_chat_state[-1]["content"]
     print(f"\n--- Обработка запроса: '{last_user_prompt[:100]}...' ---")
-    current_date = datetime.datetime.now().strftime("%Y-%m-%d") # Получаем текущую дату
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
 
-    # --- Этап 1: Генерация поисковых запросов ---
-    with st.spinner("Думаю, как лучше поискать... 🤔"): # Индикатор
-        generated_queries = generate_search_queries(last_user_prompt, current_model_id)
+    # --- Этап 0: Принятие решения о необходимости поиска ---
+    needs_search = False
+    with st.spinner("Анализирую запрос... 🤔"):
+        needs_search = should_perform_search(last_user_prompt, current_model_id)
 
-    # --- Этап 2: Веб-поиск ---
     search_results_str = ""
-    if generated_queries:
-        with st.spinner(f"Ищу в сети по {len(generated_queries)} запросам... 🌐"): # Индикатор
-            search_results_str = perform_web_search(generated_queries)
-    else:
-        print("ИИ не сгенерировал запросы, поиск по исходному запросу.")
-        with st.spinner("Ищу в сети по вашему запросу... 🌐"): # Индикатор
-             search_results_str = perform_web_search([last_user_prompt], max_results_per_query=MAX_SEARCH_RESULTS_PER_QUERY) # Используем те же параметры
+    context_for_final_answer = list(current_chat_state) # Берем актуальную историю
 
-    # --- Этап 3: Подготовка контекста для финального ответа ---
-    context_for_final_answer = list(current_chat_state)
-    is_search_successful = not ("Не удалось" in search_results_str or "не найдено" in search_results_str or "Не было сгенерировано" in search_results_str)
+    if needs_search:
+        print(">>> Требуется веб-поиск.")
+        # --- Этап 1: Генерация поисковых запросов ---
+        generated_queries = []
+        with st.spinner("Думаю, как лучше поискать... 🧐"):
+            generated_queries = generate_search_queries(last_user_prompt, current_model_id)
 
-    if is_search_successful and search_results_str:
-        # НОВЫЙ, УСИЛЕННЫЙ СИСТЕМНЫЙ ПРОМПТ
-        search_context_message = {
+        # --- Этап 2: Веб-поиск ---
+        if generated_queries:
+            with st.spinner(f"Ищу в сети по {len(generated_queries)} запросам... 🌐"):
+                search_results_str = perform_web_search(generated_queries)
+        else:
+            print("ИИ не сгенерировал запросы, поиск по исходному.")
+            with st.spinner("Ищу в сети по вашему запросу... 🌐"):
+                 search_results_str = perform_web_search([last_user_prompt], max_results_per_query=MAX_SEARCH_RESULTS_PER_QUERY)
+
+        # --- Этап 3 (для случая с поиском): Подготовка контекста ---
+        is_search_successful = not ("Не удалось" in search_results_str or "не найдено" in search_results_str or "Не было сгенерировано" in search_results_str)
+
+        if is_search_successful and search_results_str:
+            # Промпт, УЧИТЫВАЮЩИЙ ПОИСК
+            search_context_message = {
+                "role": "system",
+                "content": (
+                    f"ВАЖНО: Сегодня {current_date}. Для ответа на запрос пользователя был выполнен веб-поиск. Результаты ниже. "
+                    f"Твоя задача - дать максимально точный и АКТУАЛЬНЫЙ ответ, основываясь ПРЕЖДЕ ВСЕГО на найденной информации.\n\n"
+                    f"{search_results_str}\n--- Конец результатов ---\n\n"
+                    "Инструкция для ИИ:\n"
+                    "1.  **Приоритет веб-поиска:** Информация из поиска имеет ВЫСШИЙ ПРИОРИТЕТ над твоими знаниями для фактов, дат, текущих событий.\n"
+                    "2.  **Актуальность:** Ответ ДОЛЖЕН отражать информацию из поиска по состоянию на {current_date}.\n"
+                    "3.  **Синтез:** Синтезируй информацию из РАЗНЫХ сниппетов для связного ответа на ОРИГИНАЛЬНЫЙ запрос.\n"
+                    "4.  **Игнорирование нерелевантного:** Игнорируй не относящиеся к делу результаты.\n"
+                    "5.  **Без ссылок:** Не включай в ответ URL.\n\n"
+                    "Теперь, основываясь на этих инструкциях и результатах поиска, ответь на запрос пользователя."
+                )
+            }
+            context_for_final_answer.insert(-1, search_context_message)
+            print("Результаты поиска и промпт добавлены в контекст.")
+        else: # Поиск не удался или ничего не нашел
+             fallback_context_message = {
+                "role": "system",
+                 "content": f"(Примечание: Веб-поиск был инициирован, но не дал результатов ({search_results_str}). Сегодня {current_date}. Отвечай на основе своих знаний, но предупреди о возможной неактуальности.)"
+             }
+             context_for_final_answer.insert(-1, fallback_context_message)
+             print("В контекст добавлено уведомление о неудачном поиске.")
+
+    else: # needs_search == False
+        print(">>> Веб-поиск не требуется.")
+        # --- Этап 3 (для случая БЕЗ поиска): Подготовка контекста ---
+        no_search_context_message = {
             "role": "system",
-            "content": (
-                f"ВАЖНО: Сегодня {current_date}. При ответе на запрос пользователя ОБЯЗАТЕЛЬНО учти эту дату и предоставленные ниже результаты веб-поиска. "
-                f"Твоя задача - дать максимально точный и АКТУАЛЬНЫЙ ответ, основываясь ПРЕЖДЕ ВСЕГО на найденной в сети информации.\n\n"
-                f"{search_results_str}\n--- Конец результатов ---\n\n"
-                "Инструкция для ИИ:\n"
-                "1.  **Приоритет веб-поиска:** Информация из результатов поиска имеет ВЫСШИЙ ПРИОРИТЕТ над твоими внутренними знаниями, особенно для фактов, дат, текущих событий, имен и должностей.\n"
-                "2.  **Актуальность:** Если вопрос касается текущего положения дел (например, 'кто сейчас президент?', 'последние новости о X'), ответ ДОЛЖЕН отражать информацию из поиска по состоянию на {current_date}.\n"
-                "3.  **Синтез:** Не пересказывай результаты поиска по пунктам. Твоя задача — синтезировать информацию из РАЗНЫХ сниппетов, чтобы дать связный и полный ответ на ОРИГИНАЛЬНЫЙ запрос пользователя.\n"
-                "4.  **Игнорирование нерелевантного:** Если какие-то результаты поиска явно не относятся к запросу пользователя, игнорируй их.\n"
-                "5.  **Отсутствие информации:** Если поиск не дал релевантной информации, честно скажи об этом и отвечай на основе своих знаний, но укажи на возможное устаревание информации.\n"
-                "6.  **Без ссылок:** Не включай в свой ответ URL-адреса или формат ссылок Markdown.\n\n"
-                "Теперь, основываясь на ВСЕХ этих инструкциях и результатах поиска, ответь на запрос пользователя (он последний в истории)."
-            )
+            "content": f"Сегодня {current_date}. Веб-поиск для этого запроса не выполнялся. Отвечай на запрос пользователя, основываясь на своих общих знаниях."
         }
-        context_for_final_answer.insert(-1, search_context_message)
-        print("Результаты поиска и усиленный промпт добавлены в контекст.")
-
-    elif search_results_str: # Поиск не удался или ничего не нашел
-         search_context_message = {
-            "role": "system",
-             "content": f"(Примечание: {search_results_str}. Сегодня {current_date}. Отвечай на запрос пользователя, основываясь на своих знаниях, но предупреди о возможной неактуальности данных.)"
-         }
-         context_for_final_answer.insert(-1, search_context_message)
-         print("В контекст добавлено уведомление о неудачном поиске.")
-    else: # Не было ни результатов, ни сообщения об ошибке (маловероятно)
-        search_context_message = {
-            "role": "system",
-             "content": f"(Примечание: Веб-поиск не дал результатов. Сегодня {current_date}. Отвечай на запрос пользователя, основываясь на своих знаниях, но предупреди о возможной неактуальности данных.)"
-         }
-        context_for_final_answer.insert(-1, search_context_message)
-        print("В контекст добавлено уведомление об отсутствии результатов поиска.")
+        context_for_final_answer.insert(-1, no_search_context_message)
+        print("Добавлен промпт для ответа без поиска.")
 
 
     # --- Этап 4: Генерация и отображение финального ответа ---
     with chat_display_container:
-        with st.chat_message("assistant", avatar="💡"):
+        with st.chat_message("assistant", avatar="🧠"):
             print("Запрос финального ответа у ИИ...")
-            # Добавляем индикатор и сюда
-            with st.spinner("Формулирую ответ... ✍️"):
+            spinner_message = "Формулирую ответ..."
+            if needs_search and search_results_str and is_search_successful:
+                 spinner_message = "Анализирую результаты и формулирую ответ... ✍️"
+            elif needs_search:
+                 spinner_message = "Поиск не дал результатов, формулирую ответ... 🤔"
+
+            with st.spinner(spinner_message):
                  response_generator = stream_ai_response(current_model_id, context_for_final_answer)
                  full_response = st.write_stream(response_generator)
             print("Финальный ответ получен.")
@@ -341,8 +376,7 @@ if current_chat_state and current_chat_state[-1]["role"] == "user":
              save_all_chats(st.session_state.all_chats, active_chat_name)
              print("Ответ ассистента сохранен.")
         else: print("Ошибка: Активный чат исчез перед сохранением ответа.")
-    else:
-        print("Финальный ответ пуст, сохранение не требуется.")
+    else: print("Финальный ответ пуст, сохранение не требуется.")
 
     print("--- Обработка запроса завершена ---")
 
