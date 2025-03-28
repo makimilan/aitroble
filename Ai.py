@@ -9,13 +9,12 @@ from streamlit_local_storage import LocalStorage
 from duckduckgo_search import DDGS
 import traceback
 import re
-import logging # Добавим логирование
+import logging
 
 # --- Настройка логирования ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Ключ API из секретов ---
-# Попытка получить ключ API
 OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY")
 
 # --- Константы ---
@@ -59,6 +58,8 @@ custom_css = f"""
     [data-testid="stSidebar"] .stButton button {{ width: 100%; margin-bottom: 0.5rem; border-radius: 5px; }}
     [data-testid="stSidebar"] .stRadio [data-testid="stWidgetLabel"] {{ font-size: 0.9rem; margin-bottom: 0.3rem; font-weight: bold; }}
     [data-testid="stSidebar"] [data-testid="stToggle"] label {{ font-size: 0.95rem; font-weight: bold; }}
+    /* Стили для st.status */
+    [data-testid="stStatusWidget"] div[role="status"] {{ text-align: center; }}
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -85,13 +86,12 @@ def load_all_chats():
         try:
             data = json.loads(data_str)
             if isinstance(data, dict) and "chats" in data and "active_chat" in data and isinstance(data["chats"], dict):
-                # Очистка истории
                 cleaned_chats = {}
                 for name, history in data["chats"].items():
                     if isinstance(history, list):
                         cleaned_chats[name] = [msg for msg in history if isinstance(msg, dict) and msg.get("role") and msg.get("content")]
                     else:
-                        cleaned_chats[name] = [] # Пустой список, если история не список
+                        cleaned_chats[name] = []
 
                 if not cleaned_chats:
                     logging.info("Загружены пустые чаты, возврат к значениям по умолчанию.")
@@ -103,7 +103,6 @@ def load_all_chats():
                     active_chat = list(cleaned_chats.keys())[0]
                     logging.warning(f"Активный чат '{data['active_chat']}' не найден, выбран первый: '{active_chat}'.")
 
-                # Загружаем состояние поиска, по умолчанию False если не найдено
                 st.session_state.web_search_enabled = data.get("web_search_enabled", initial_search_state)
                 logging.info(f"Чаты и состояние поиска ({st.session_state.web_search_enabled=}) успешно загружены.")
                 return cleaned_chats, active_chat
@@ -116,7 +115,6 @@ def load_all_chats():
     else:
         logging.info("Данные в LocalStorage не найдены, используются значения по умолчанию.")
 
-    # Если что-то пошло не так или данных нет
     st.session_state.web_search_enabled = initial_search_state
     return default_chats, default_name
 
@@ -131,7 +129,6 @@ def save_all_chats(chats_dict, active_chat_name, web_search_state):
          logging.error("Попытка сохранить неверный формат имени активного чата.")
          return False
 
-    # Очистка перед сохранением (на всякий случай)
     cleaned_chats = {}
     for name, history in chats_dict.items():
         if isinstance(history, list):
@@ -139,9 +136,8 @@ def save_all_chats(chats_dict, active_chat_name, web_search_state):
         else:
             cleaned_chats[name] = []
 
-    # Проверка активного чата
     if not cleaned_chats:
-        active_chat_name = None # Нет чатов - нет активного
+        active_chat_name = None
     elif active_chat_name not in cleaned_chats:
         active_chat_name = list(cleaned_chats.keys())[0] if cleaned_chats else None
         logging.warning(f"Активный чат для сохранения не найден, выбран первый: {active_chat_name}")
@@ -172,7 +168,7 @@ def generate_search_queries(user_prompt, model_id):
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:8501", # Или ваш реальный URL, если деплоите
+        "HTTP-Referer": "http://localhost:8501", # Или ваш реальный URL
         "X-Title": "Streamlit Toggle Search Chat AI"
     }
     generation_prompt = f"""Проанализируй запрос пользователя. Сгенерируй до {MAX_QUERIES_TO_GENERATE} эффективных и лаконичных поисковых запросов (на русском), которые помогут найти актуальную информацию в интернете. Выведи только запросы, каждый на новой строке. Не нумеруй запросы.
@@ -191,14 +187,13 @@ def generate_search_queries(user_prompt, model_id):
     try:
         logging.info(f"Генерация поисковых запросов для: '{user_prompt[:50]}...'")
         response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status() # Проверка на HTTP ошибки (4xx, 5xx)
+        response.raise_for_status()
         data = response.json()
         raw_queries = data.get("choices", [{}])[0].get("message", {}).get("content", "")
 
         if raw_queries:
-            # Удаляем нумерацию, точки, звездочки в начале строк
             queries = [re.sub(r"^\s*[\d\.\-\*]+\s*", "", q.strip()) for q in raw_queries.split('\n') if q.strip()]
-            generated_queries = [q for q in queries if q] # Убираем пустые строки после очистки
+            generated_queries = [q for q in queries if q]
             logging.info(f"  Сгенерировано запросов: {generated_queries}")
         else:
             logging.warning("  API вернуло пустой ответ для генерации запросов.")
@@ -210,7 +205,7 @@ def generate_search_queries(user_prompt, model_id):
         logging.error(f"  Ошибка генерации запросов: {e}")
         st.toast(f"Ошибка сети при генерации запросов: {e}", icon="🚨")
     except Exception as e:
-        logging.error(f"  Неизвестная ошибка при генерации запросов: {e}")
+        logging.error(f"  Неизвестная ошибка при генерации запросов: {e}", exc_info=True) # Добавлено exc_info
         st.toast("Неизвестная ошибка при генерации запросов.", icon="❓")
 
     return generated_queries[:MAX_QUERIES_TO_GENERATE]
@@ -235,10 +230,8 @@ def perform_web_search(queries: list, max_results_per_query=MAX_SEARCH_RESULTS_P
                 except Exception as e:
                     logging.error(f"    Ошибка при поиске по запросу '{query}': {e}")
                     st.toast(f"Ошибка поиска по запросу: {query}", icon="🕸️")
-                    # Продолжаем со следующими запросами
 
         if aggregated_results:
-            # Отбираем уникальные результаты по тексту (body)
             unique_results_dict = {}
             for res in aggregated_results:
                 body = res.get('body')
@@ -266,7 +259,7 @@ def perform_web_search(queries: list, max_results_per_query=MAX_SEARCH_RESULTS_P
         return all_results_text.strip()
 
     except Exception as e:
-        logging.error(f"Критическая ошибка во время веб-поиска: {e}")
+        logging.error(f"Критическая ошибка во время веб-поиска: {e}", exc_info=True) # Добавлено exc_info
         st.error(f"Произошла ошибка во время веб-поиска: {e}", icon="🕸️")
         return f"Ошибка веб-поиска: {e}"
 
@@ -280,7 +273,7 @@ def stream_ai_response(model_id_func, chat_history_func):
     }
     if not isinstance(chat_history_func, list):
         logging.error("История чата для стриминга передана в неверном формате.")
-        yield None # Сигнал об ошибке
+        yield None
         return
 
     payload = {"model": model_id_func, "messages": chat_history_func, "stream": True}
@@ -300,7 +293,7 @@ def stream_ai_response(model_id_func, chat_history_func):
                         if json_data_str == "[DONE]":
                             logging.info("Стриминг завершен сигналом [DONE].")
                             break
-                        if json_data_str: # Убедимся, что строка не пустая
+                        if json_data_str:
                            chunk = json.loads(json_data_str)
                            delta = chunk.get("choices", [{}])[0].get("delta", {})
                            if delta and "content" in delta:
@@ -309,70 +302,62 @@ def stream_ai_response(model_id_func, chat_history_func):
                                yield delta_content
                     except json.JSONDecodeError as e:
                         logging.warning(f"Ошибка декодирования JSON чанка: {e}. Строка: '{json_data_str}'")
-                        continue # Пропускаем поврежденный чанк
+                        continue
                     except Exception as e:
                         logging.error(f"Ошибка обработки чанка стрима: {e}")
                         continue
-        # Проверка, был ли хоть какой-то контент
         if not stream_successful:
              logging.warning("Стриминг завершился без передачи контента.")
-             # Можно не возвращать None здесь, просто не было данных
 
     except requests.exceptions.Timeout:
         logging.error(f"Ошибка стриминга: Таймаут ({STREAM_TIMEOUT}s) соединения с OpenRouter.")
         st.error(f"Таймаут ({STREAM_TIMEOUT} сек) при ожидании ответа от ИИ.", icon="⏱️")
-        yield None # Сигнал об ошибке
+        yield None
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка стриминга: {e}")
         st.error(f"Ошибка сети при получении ответа от ИИ: {e}", icon="🚨")
-        yield None # Сигнал об ошибке
+        yield None
     except Exception as e:
         logging.error(f"Неизвестная ошибка во время стриминга: {e}", exc_info=True)
         st.error("Произошла неизвестная ошибка при получении ответа от ИИ.", icon="❓")
-        yield None # Сигнал об ошибке
-
+        yield None
 
 # --- Инициализация состояния ---
 if "all_chats" not in st.session_state:
     logging.info("Инициализация состояния сессии...")
     st.session_state.all_chats, st.session_state.active_chat = load_all_chats()
-    # web_search_enabled устанавливается внутри load_all_chats
 if "selected_mode" not in st.session_state:
     st.session_state.selected_mode = DEFAULT_MODE
 if "web_search_enabled" not in st.session_state:
-     # Эта строка нужна на случай, если load_all_chats не смогла установить состояние
      st.session_state.web_search_enabled = False
      logging.warning("Состояние web_search_enabled не было установлено при загрузке, установлено в False.")
 
 # --- Определяем активный чат ---
-# Проверка и восстановление, если активный чат некорректен
 if st.session_state.active_chat not in st.session_state.all_chats:
     logging.warning(f"Активный чат '{st.session_state.active_chat}' не найден в списке чатов.")
     if st.session_state.all_chats:
         st.session_state.active_chat = list(st.session_state.all_chats.keys())[0]
         logging.info(f"Установлен первый доступный чат: '{st.session_state.active_chat}'")
     else:
-        # Если вообще нет чатов, создаем новый
         new_name = generate_new_chat_name([])
         st.session_state.all_chats = {new_name: []}
         st.session_state.active_chat = new_name
         logging.info(f"Список чатов пуст. Создан новый чат: '{new_name}'")
         save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
 
-active_chat_name = st.session_state.active_chat # Теперь гарантированно существует
+active_chat_name = st.session_state.active_chat
 
 # --- Сайдбар ---
 with st.sidebar:
     st.markdown("## 💬 Чаты")
     chat_names = list(st.session_state.all_chats.keys())
 
-    # Выбор активного чата (только если есть чаты)
     if chat_names:
         try:
             active_chat_index = chat_names.index(active_chat_name)
         except ValueError:
-            logging.error(f"Критическая ошибка: active_chat_name '{active_chat_name}' не найден в chat_names, хотя должен быть.")
-            active_chat_index = 0 # Возвращаемся к первому на всякий случай
+            logging.error(f"Критическая ошибка: active_chat_name '{active_chat_name}' не найден в chat_names.")
+            active_chat_index = 0
 
         selected_chat = st.radio(
             "Выберите чат:",
@@ -382,11 +367,9 @@ with st.sidebar:
             key="chat_selector"
             )
 
-        # Если пользователь выбрал другой чат
         if selected_chat is not None and selected_chat != active_chat_name:
             st.session_state.active_chat = selected_chat
             logging.info(f"Пользователь выбрал чат: {selected_chat}")
-            # Сохраняем только смену активного чата, история не менялась
             save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
             st.rerun()
     else:
@@ -394,7 +377,6 @@ with st.sidebar:
 
     st.divider()
 
-    # Кнопка "Новый чат"
     if st.button("➕ Новый чат", key="new_chat_button"):
         new_name = generate_new_chat_name(list(st.session_state.all_chats.keys()))
         st.session_state.all_chats[new_name] = []
@@ -403,7 +385,6 @@ with st.sidebar:
         save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
         st.rerun()
 
-    # Кнопка "Удалить текущий чат" (только если есть что удалять)
     if chat_names:
         if st.button("🗑️ Удалить текущий чат", type="secondary", key="delete_chat_button"):
             current_chat_to_delete = st.session_state.active_chat
@@ -412,11 +393,9 @@ with st.sidebar:
                 del st.session_state.all_chats[current_chat_to_delete]
                 logging.info(f"Чат '{current_chat_to_delete}' удален.")
                 remaining_chats = list(st.session_state.all_chats.keys())
-                # Выбираем новый активный чат
                 if remaining_chats:
                     st.session_state.active_chat = remaining_chats[0]
                 else:
-                    # Если удалили последний, создаем новый
                     new_name = generate_new_chat_name([])
                     st.session_state.all_chats = {new_name: []}
                     st.session_state.active_chat = new_name
@@ -426,10 +405,8 @@ with st.sidebar:
             else:
                  logging.warning(f"Попытка удалить несуществующий чат: {current_chat_to_delete}")
 
-
     st.divider()
 
-    # Переключатель веб-поиска
     search_toggled = st.toggle(
         "🌐 Веб-поиск",
         value=st.session_state.web_search_enabled,
@@ -439,16 +416,15 @@ with st.sidebar:
         st.session_state.web_search_enabled = search_toggled
         logging.info(f"Веб-поиск переключен в состояние: {search_toggled}")
         save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
-        # Не нужен rerun, изменение состояния сохранится и применится при следующем взаимодействии
+        # Не нужен rerun
 
     st.divider()
 
-    # Выбор режима работы
     mode_options = list(MODES.keys())
     try:
         current_mode_index = mode_options.index(st.session_state.selected_mode)
     except ValueError:
-        logging.warning(f"Выбранный режим '{st.session_state.selected_mode}' не найден в опциях. Установлен режим по умолчанию.")
+        logging.warning(f"Выбранный режим '{st.session_state.selected_mode}' не найден. Установлен режим по умолчанию.")
         st.session_state.selected_mode = DEFAULT_MODE
         current_mode_index = 0
 
@@ -461,7 +437,7 @@ with st.sidebar:
     if selected_mode_radio is not None and selected_mode_radio != st.session_state.selected_mode:
         st.session_state.selected_mode = selected_mode_radio
         logging.info(f"Выбран режим работы: {selected_mode_radio}")
-        # Не нужен rerun, изменение состояния сохранится
+        # Не нужен rerun
 
 # --- Основная область: Чат ---
 current_mode_name = st.session_state.get("selected_mode", DEFAULT_MODE)
@@ -470,7 +446,6 @@ current_model_id = MODES.get(current_mode_name, MODES[DEFAULT_MODE])
 # Отображение истории чата
 chat_display_container = st.container()
 with chat_display_container:
-    # Проверка, что активный чат все еще существует перед отрисовкой
     if active_chat_name in st.session_state.all_chats:
         current_display_history = st.session_state.all_chats[active_chat_name]
         for message in current_display_history:
@@ -483,25 +458,20 @@ with chat_display_container:
 
 # --- Поле ввода пользователя ---
 if prompt := st.chat_input(f"Спроси {current_mode_name}..."):
-    # Проверка существования чата перед добавлением
     if active_chat_name in st.session_state.all_chats:
         logging.info(f"Получен новый промпт от пользователя в чате '{active_chat_name}'.")
         st.session_state.all_chats[active_chat_name].append({"role": "user", "content": prompt})
         save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
-        st.rerun() # Перезапускаем скрипт для отображения сообщения пользователя и запуска логики ответа ИИ
+        st.rerun()
     else:
         st.error("Ошибка: Активный чат не найден. Невозможно добавить сообщение.", icon="❌")
         logging.error(f"Ошибка добавления сообщения: активный чат '{active_chat_name}' не найден.")
 
 
 # --- Логика ответа ИИ ---
-# Выполняется только если скрипт был перезапущен после ввода пользователя (т.е., последнее сообщение - от user)
-
-# Снова проверяем существование активного чата
 if active_chat_name in st.session_state.all_chats:
     current_chat_state = st.session_state.all_chats[active_chat_name]
 
-    # Выполняем, только если история не пуста и последнее сообщение от пользователя
     if current_chat_state and current_chat_state[-1]["role"] == "user":
 
         last_user_prompt = current_chat_state[-1]["content"]
@@ -510,15 +480,15 @@ if active_chat_name in st.session_state.all_chats:
 
         current_date = datetime.datetime.now().strftime("%Y-%m-%d")
         search_results_str = ""
-        search_performed_successfully = False # Флаг успешности поиска
-        context_for_ai = list(current_chat_state) # Копируем историю для модификации
+        search_performed_successfully = False
+        context_for_ai = list(current_chat_state)
         needs_search = st.session_state.web_search_enabled
 
         # --- Этапы поиска (только если needs_search == True) ---
         if needs_search:
             logging.info(">>> Веб-поиск включен.")
             generated_queries = []
-            search_results_str = "Поиск не выполнялся." # Значение по умолчанию
+            search_results_str = "Поиск не выполнялся."
 
             # 1. Генерация запросов
             try:
@@ -527,7 +497,6 @@ if active_chat_name in st.session_state.all_chats:
             except Exception as e:
                 logging.error(f"Ошибка при вызове generate_search_queries: {e}", exc_info=True)
                 st.error("Не удалось сгенерировать поисковые запросы.", icon="❓")
-                # Попробуем искать по исходному запросу
 
             # 2. Выполнение поиска
             queries_to_search = generated_queries if generated_queries else [last_user_prompt]
@@ -538,7 +507,6 @@ if active_chat_name in st.session_state.all_chats:
                 spinner_text = f"Ищу в сети по {len(queries_to_search)} запросам... 🌐" if generated_queries else "Ищу в сети по вашему запросу... 🌐"
                 with st.spinner(spinner_text):
                      search_results_str = perform_web_search(queries_to_search)
-                # Проверяем успешность поиска (не содержит строк об ошибках/отсутствии результатов)
                 if search_results_str and not any(err_msg in search_results_str for err_msg in ["Ошибка веб-поиска", "не дал результатов", "Нет запросов", "Не найдено уникальных"]):
                      search_performed_successfully = True
                      logging.info("Веб-поиск дал результаты.")
@@ -548,7 +516,7 @@ if active_chat_name in st.session_state.all_chats:
             except Exception as e:
                  logging.error(f"Ошибка при вызове perform_web_search: {e}", exc_info=True)
                  st.error("Произошла ошибка во время веб-поиска.", icon="🕸️")
-                 search_results_str = f"Ошибка веб-поиска: {e}" # Записываем ошибку для системного промпта
+                 search_results_str = f"Ошибка веб-поиска: {e}"
 
             # 3. Формирование системного промпта с результатами поиска
             system_prompt = {"role": "system"}
@@ -556,89 +524,105 @@ if active_chat_name in st.session_state.all_chats:
                  system_prompt["content"] = f"Текущая дата: {current_date}. Веб-поиск был ВЫПОЛНЕН УСПЕШНО. Используй ПРЕДОСТАВЛЕННЫЕ НИЖЕ результаты веб-поиска как ОСНОВНОЙ ИСТОЧНИК для ответа на последний запрос пользователя. Не ссылайся на сам факт поиска, просто используй информацию. Не включай URL или прямые ссылки в ответ.\n\n{search_results_str}\n\n--- Конец результатов поиска ---\n\nОтветь на запрос пользователя, основываясь на этой информации."
                  logging.info("Системный промпт сформирован с результатами поиска.")
             else:
-                 # Сообщаем ИИ, что поиск был, но не помог
                  system_prompt["content"] = f"Текущая дата: {current_date}. Веб-поиск был ВКЛЮЧЕН, но не дал полезных результатов (Возможная причина: '{search_results_str}'). Отвечай на последний запрос пользователя, основываясь на своих общих знаниях. Предупреди пользователя, что актуальность информации не гарантирована из-за неудачного поиска."
                  logging.info("Системный промпт сформирован с уведомлением о неудачном поиске.")
-            # Вставляем системный промпт ПЕРЕД последним сообщением пользователя
             context_for_ai.insert(-1, system_prompt)
 
         else: # needs_search == False
             logging.info(">>> Веб-поиск выключен.")
             system_prompt = {"role": "system", "content": f"Текущая дата: {current_date}. Веб-поиск ВЫКЛЮЧЕН. Отвечай на последний запрос пользователя, основываясь только на своих общих знаниях."}
-            context_for_ai.insert(-1, system_prompt) # Вставляем перед последним сообщением
+            context_for_ai.insert(-1, system_prompt)
             logging.info("Системный промпт сформирован без информации о поиске.")
 
-        # --- ЕДИНЫЙ вызов ИИ со стримингом ---
+
+        # === ИСПРАВЛЕННЫЙ БЛОК: Сбор ответа ИИ ===
         final_response_to_save = None
         ai_response_error = False
+        full_response_chunks = []
 
-        # Отображаем контейнер для ответа ассистента
-        with st.chat_message("assistant", avatar="💡"):
-            placeholder = st.empty() # Место для стриминга
-            spinner_message = "Генерирую ответ..."
-            if needs_search:
-                spinner_message = "Анализирую веб-данные..." if search_performed_successfully else "Поиск не помог, отвечаю на основе знаний..."
+        spinner_message = "Генерирую ответ..."
+        if needs_search:
+            spinner_message = "Анализирую веб-данные..." if search_performed_successfully else "Поиск не помог, отвечаю на основе знаний..."
 
-            logging.info("Запрос финального ответа от ИИ...")
-            full_response_chunks = []
+        logging.info("Запрос и сбор финального ответа от ИИ...")
+        try:
+            # Используем st.status для индикации процесса без chat_message
+            with st.status(spinner_message, expanded=True) as status: # expanded=True чтобы сразу видеть текст
+                response_generator = stream_ai_response(current_model_id, context_for_ai)
+                for chunk in response_generator:
+                    if chunk is None: # Проверяем сигнал об ошибке из генератора
+                        logging.error("Генератор стриминга вернул ошибку (None).")
+                        ai_response_error = True
+                        status.update(label="Ошибка при получении ответа!", state="error", expanded=True)
+                        break # Прерываем цикл обработки чанков
+                    if chunk:
+                        full_response_chunks.append(chunk)
+                        # Не обновляем плейсхолдер здесь
+
+                # После завершения цикла стриминга
+                if not ai_response_error:
+                    final_response_to_save = "".join(full_response_chunks)
+                    if final_response_to_save:
+                        logging.info("Ответ от ИИ успешно собран.")
+                        status.update(label="Ответ получен!", state="complete", expanded=False) # Сворачиваем статус после успеха
+                    else:
+                        # Стриминг завершился, но контента нет
+                        logging.warning("Ответ от ИИ пуст после стриминга.")
+                        status.update(label="ИИ не предоставил ответ.", state="warning", expanded=True)
+                        final_response_to_save = None # Не сохраняем пустой ответ
+                # Если была ошибка, статус уже обновлен на error
+
+        except Exception as e:
+             # Ловим ошибки, которые могли произойти вне генератора, но при его использовании
+             logging.error(f"Непредвиденная ошибка при сборе стрима ответа ИИ: {e}", exc_info=True)
+             st.error(f"Произошла ошибка при обработке ответа ИИ: {e}", icon="💥")
+             final_response_to_save = None
+             ai_response_error = True
+             # Закрываем статус с ошибкой, если он еще активен
+             if 'status' in locals() and status:
+                 try:
+                    status.update(label=f"Ошибка обработки: {e}", state="error", expanded=True)
+                 except Exception: # На случай если статус уже не существует
+                    pass
+
+
+        # === ИСПРАВЛЕННЫЙ БЛОК: Отображение и Сохранение ответа (ПОСЛЕ сбора) ===
+
+        # Отображаем сообщение ассистента ТОЛЬКО ЕСЛИ ответ успешно собран
+        if final_response_to_save and not ai_response_error:
+            logging.info("Отображение полного ответа ассистента...")
             try:
-                # Используем placeholder.container() чтобы spinner был внутри него
-                with placeholder.container():
-                    with st.spinner(spinner_message):
-                        response_generator = stream_ai_response(current_model_id, context_for_ai)
-                        for chunk in response_generator:
-                            if chunk is None: # Проверяем сигнал об ошибке из генератора
-                                logging.error("Генератор стриминга вернул ошибку (None).")
-                                ai_response_error = True
-                                break # Прерываем цикл обработки чанков
-                            if chunk:
-                                full_response_chunks.append(chunk)
-                                # Обновляем плейсхолдер с текущим текстом и индикатором
-                                placeholder.markdown("".join(full_response_chunks) + "▌")
+                # Создаем НОВОЕ сообщение чата с ПОЛНЫМ ответом
+                with st.chat_message("assistant", avatar="💡"):
+                    st.markdown(final_response_to_save, unsafe_allow_html=True) # Добавил unsafe_allow_html на всякий случай, если ИИ вернет форматирование
+                logging.info("Полный ответ ассистента успешно отображен.")
 
-                # После завершения стриминга (или ошибки)
-                final_response_to_save = "".join(full_response_chunks)
-
-                if ai_response_error:
-                     placeholder.error("Не удалось получить ответ от ИИ из-за ошибки.", icon="😔")
-                     final_response_to_save = None # Не сохраняем ответ, если была ошибка
-                elif final_response_to_save:
-                     placeholder.markdown(final_response_to_save) # Показываем финальный ответ
-                     logging.info("Ответ от ИИ успешно получен и отображен.")
+                # Сохраняем ответ только если он успешно отображен
+                if active_chat_name in st.session_state.all_chats:
+                     current_history_for_save = st.session_state.all_chats[active_chat_name]
+                     # Проверка, чтобы не дублировать последнее сообщение, если вдруг что-то пошло не так
+                     if not current_history_for_save or current_history_for_save[-1].get("role") != "assistant" or current_history_for_save[-1].get("content") != final_response_to_save:
+                          current_history_for_save.append({"role": "assistant", "content": final_response_to_save})
+                          save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
+                          logging.info("Ответ ассистента сохранен.")
+                     else:
+                          logging.warning("Обнаружено дублирование ответа ассистента. Сохранение пропущено.")
                 else:
-                     # Стриминг завершился, но контента нет (и не было ошибки)
-                     placeholder.warning("ИИ не предоставил ответ.", icon="🤷")
-                     logging.warning("Ответ от ИИ пуст.")
-                     final_response_to_save = None # Не сохраняем пустой ответ
+                     logging.error(f"Ошибка сохранения ответа: чат '{active_chat_name}' исчез.")
 
-            except Exception as e:
-                 # Ловим ошибки, которые могли произойти вне генератора, но при его использовании
-                 logging.error(f"Непредвиденная ошибка при обработке стрима ответа ИИ: {e}", exc_info=True)
-                 placeholder.error("Произошла ошибка при обработке ответа ИИ.", icon="💥")
-                 final_response_to_save = None
-                 ai_response_error = True
+            except Exception as render_error:
+                 # Ловим ошибку рендеринга финального сообщения markdown
+                 logging.error(f"Ошибка при рендеринге финального сообщения markdown: {render_error}", exc_info=True)
+                 st.error(f"Не удалось отобразить ответ ИИ из-за ошибки рендеринга: {render_error}", icon="🖼️")
+                 # В этом случае ответ не будет сохранен, так как он вызвал ошибку отображения
 
-
-        # --- Сохранение ответа ---
-        if final_response_to_save:
-            # Еще раз проверяем, что чат существует (на всякий случай)
-            if active_chat_name in st.session_state.all_chats:
-                 current_history_for_save = st.session_state.all_chats[active_chat_name]
-                 # Убедимся, что не добавляем дубликат или пустое сообщение ассистента
-                 if not current_history_for_save or current_history_for_save[-1].get("role") != "assistant":
-                      current_history_for_save.append({"role": "assistant", "content": final_response_to_save})
-                      save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
-                      logging.info("Ответ ассистента сохранен.")
-                 else:
-                      logging.warning("Попытка сохранить ответ ассистента, когда последнее сообщение уже от него. Сохранение пропущено.")
-            else:
-                 logging.error(f"Ошибка сохранения ответа: чат '{active_chat_name}' исчез во время генерации ответа.")
         elif ai_response_error:
-             logging.info("Ответ ИИ не сохранен из-за ошибки.")
-        else:
-             logging.info("Пустой ответ от ИИ, не сохранено.")
+             logging.info("Ответ ИИ не отображен и не сохранен из-за ошибки.")
+             # Сообщение об ошибке уже должно было быть показано через st.error или status.update
+
+        else: # Ответ пустой, но не было ошибки
+             logging.info("Пустой ответ от ИИ, не отображено и не сохранено.")
+             # Предупреждение уже должно было быть показано через status.update
 
         logging.info(f"--- Обработка ответа ИИ для чата '{active_chat_name}' завершена ---")
-        # НЕ НУЖЕН rerun() здесь, так как этот блок выполняется в рамках rerun(), запущенного вводом пользователя.
-
-# --- Футер не нужен ---
+        # Не нужен rerun здесь
