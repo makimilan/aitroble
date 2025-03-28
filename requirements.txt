@@ -1,3 +1,4 @@
 streamlit
 requests
 streamlit-local-storage
+duckduckgo-search
