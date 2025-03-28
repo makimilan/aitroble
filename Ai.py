@@ -22,11 +22,11 @@ MODES = {
 DEFAULT_MODE = "Стандарт (V3)"
 LOCAL_STORAGE_KEY = "multi_chat_storage_v8" # Новый ключ
 DEFAULT_CHAT_NAME = "Новый чат"
-MAX_SEARCH_RESULTS = 3 # Максимальное количество результатов поиска
+MAX_SEARCH_RESULTS = 5 # <--- Увеличено количество результатов
 
 # --- Настройка страницы ---
 st.set_page_config(
-    page_title="Чат ИИ с веб-поиском", # Изменено
+    page_title="Чат ИИ с веб-поиском",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -89,7 +89,7 @@ def save_all_chats(chats_dict, active_chat_name):
         try:
             localS.setItem(LOCAL_STORAGE_KEY, json.dumps(data_to_save)); return True
         except Exception as e:
-            print(f"Ошибка сохранения чатов: {e}") # Добавим вывод ошибки
+            print(f"Ошибка сохранения чатов: {e}")
             return False
     return False
 
@@ -102,7 +102,7 @@ def generate_new_chat_name(existing_names):
 def perform_web_search(query, max_results=MAX_SEARCH_RESULTS):
     """Выполняет веб-поиск с помощью DuckDuckGo и возвращает форматированные результаты."""
     results_text = ""
-    st.write(f"_Идет поиск в сети по запросу: \"{query[:50]}...\"_") # Индикатор поиска
+    # st.write(...) # <--- Индикатор поиска УДАЛЕН
     search_results = []
     try:
         # Используем менеджер контекста для DDGS
@@ -118,14 +118,13 @@ def perform_web_search(query, max_results=MAX_SEARCH_RESULTS):
                 # Укорачиваем описание для краткости
                 body_short = (body[:180] + '...') if len(body) > 180 else body
                 results_text += f"{i}. [{title}]({href}): {body_short}\n" # Добавим ссылку
-            results_text += "--- Конец результатов поиска ---"
+            # Убрал "--- Конец результатов поиска ---" из строки результатов, т.к. добавляю в промпт ниже
         else:
              results_text = "По вашему запросу ничего не найдено в сети."
 
-        return results_text.strip()
+        return results_text.strip() # Возвращаем только сами результаты или сообщение об отсутствии
 
     except Exception as e:
-        # st.error(f"Ошибка веб-поиска: {e}") # Можно показать ошибку пользователю
         print(f"Ошибка веб-поиска: {e}") # Логируем ошибку
         # traceback.print_exc() # Раскомментируйте для детальной отладки
         return "Не удалось выполнить веб-поиск из-за ошибки."
@@ -133,11 +132,10 @@ def perform_web_search(query, max_results=MAX_SEARCH_RESULTS):
 # --- Инициализация состояния ---
 if "all_chats" not in st.session_state:
     st.session_state.all_chats, st.session_state.active_chat = load_all_chats()
-    # Проверка и исправление активного чата, если его нет в словаре
     if st.session_state.active_chat not in st.session_state.all_chats:
         if st.session_state.all_chats:
             st.session_state.active_chat = list(st.session_state.all_chats.keys())[0]
-        else: # Если чатов вообще нет
+        else:
             new_name = generate_new_chat_name([])
             st.session_state.all_chats = {new_name: []}
             st.session_state.active_chat = new_name
@@ -148,7 +146,6 @@ if "selected_mode" not in st.session_state:
 
 # --- Определяем активный чат ДО обработки ввода/вывода ---
 active_chat_name = st.session_state.active_chat
-# Получаем копию, чтобы избежать проблем с изменением во время итерации
 active_chat_history = list(st.session_state.all_chats.get(active_chat_name, []))
 
 # --- Сайдбар: Управление чатами и режимом ---
@@ -211,14 +208,14 @@ current_model_id = MODES.get(current_mode_name, MODES[DEFAULT_MODE])
 # Отображение приветственного сообщения, если чат пуст
 if not active_chat_history:
      welcome_message = {"role": "assistant", "content": f"👋 Привет! Я {current_mode_name} с доступом к веб-поиску. Начнем новый чат!"}
-     st.session_state.all_chats[active_chat_name] = [welcome_message] # Обновляем основной словарь
+     st.session_state.all_chats[active_chat_name] = [welcome_message]
      save_all_chats(st.session_state.all_chats, active_chat_name)
-     active_chat_history = [welcome_message] # Обновляем локальную копию для отображения
+     active_chat_history = [welcome_message]
 
 # Контейнер для сообщений
 chat_display_container = st.container()
 with chat_display_container:
-    for message in active_chat_history: # Используем локальную копию истории
+    for message in active_chat_history:
         avatar = "🧑‍💻" if message["role"] == "user" else "🤖"
         with st.chat_message(message["role"], avatar=avatar):
             st.markdown(message["content"], unsafe_allow_html=True)
@@ -226,37 +223,29 @@ with chat_display_container:
 # --- Функция стриминга (без изменений) ---
 def stream_ai_response(model_id_func, chat_history_func):
     try:
-        # Проверка наличия ключа API
         api_key_from_secrets = st.secrets.get("OPENROUTER_API_KEY")
         if not api_key_from_secrets:
              st.error("⛔ Секрет 'OPENROUTER_API_KEY' не найден или пустой.", icon="🚨")
-             # Используем yield для корректного завершения генератора
-             yield None
-             return # Завершаем выполнение генератора
+             yield None; return
     except Exception as e:
         st.error(f"🤯 Ошибка доступа к секретам: {e}", icon="💥")
-        yield None
-        return
+        yield None; return
 
     headers = {"Authorization": f"Bearer {api_key_from_secrets}", "Content-Type": "application/json"}
     if not isinstance(chat_history_func, list):
         print("Ошибка: История чата должна быть списком.")
-        yield None
-        return
+        yield None; return
 
-    # Добавляем HTTP Referer и X-Title (рекомендовано OpenRouter)
     headers.update({
-        "HTTP-Referer": "http://localhost:8501", # Замените на URL вашего приложения, если развернуто
-        "X-Title": "Streamlit Chat AI" # Название вашего приложения
+        "HTTP-Referer": "http://localhost:8501", # Замените, если нужно
+        "X-Title": "Streamlit Chat AI"
     })
 
     payload = {"model": model_id_func, "messages": chat_history_func, "stream": True}
 
     try:
-        response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, stream=True, timeout=120) # Увеличим таймаут
-        response.raise_for_status() # Проверяем HTTP ошибки (4xx, 5xx)
-
-        # Индикатор того, получили ли мы хоть какой-то контент
+        response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, stream=True, timeout=120)
+        response.raise_for_status()
         has_content = False
         for line in response.iter_lines():
             if line:
@@ -272,17 +261,12 @@ def stream_ai_response(model_id_func, chat_history_func):
                             yield delta_content
                     except json.JSONDecodeError:
                         print(f"Ошибка декодирования JSON: {decoded_line}")
-                        continue # Пропускаем битую строку
+                        continue
                     except Exception as e_json:
                         print(f"Ошибка обработки чанка: {e_json}")
                         continue
-
-        # Если цикл завершился, но контента не было (например, только [DONE])
         if not has_content:
              print("Стриминг завершился без получения контента.")
-             # Можно вернуть специальный маркер или пустую строку, если нужно
-             # yield ""
-
 
     except requests.exceptions.Timeout:
         st.error("⏳ Превышено время ожидания ответа от ИИ.", icon="⏱️")
@@ -295,75 +279,62 @@ def stream_ai_response(model_id_func, chat_history_func):
     except Exception as e:
         st.error(f"💥 Неожиданная ошибка при получении ответа ИИ: {e}", icon="🔥")
         print(f"Неожиданная ошибка стриминга: {e}")
-        # traceback.print_exc() # Раскомментируйте для детальной отладки
         yield None
 
 
 # --- Поле ввода пользователя ---
 if prompt := st.chat_input(f"Спроси {current_mode_name}..."):
-    # Добавляем сообщение пользователя в оригинальную историю в session_state
     st.session_state.all_chats[active_chat_name].append({"role": "user", "content": prompt})
     save_all_chats(st.session_state.all_chats, active_chat_name)
-    # Немедленно перерисовываем страницу, чтобы показать сообщение пользователя
     st.rerun()
 
 # --- Логика ответа ИИ (после rerun, если последнее сообщение от пользователя) ---
-# Используем active_chat_history, которая является копией на момент начала скрипта
-# Проверяем, что история не пуста и последнее сообщение *действительно* от пользователя
 current_chat_state = st.session_state.all_chats.get(active_chat_name, [])
 if current_chat_state and current_chat_state[-1]["role"] == "user":
 
     last_user_prompt = current_chat_state[-1]["content"]
 
     # --- Веб-поиск ---
-    # Выполняем поиск ПЕРЕД отправкой основного запроса к ИИ
-    # Это будет отображено над полем ввода благодаря st.rerun() и логике ниже
-    search_results_str = perform_web_search(last_user_prompt)
+    search_results_str = perform_web_search(last_user_prompt) # Результаты или сообщение об ошибке/отсутствии
 
     # --- Подготовка контекста для ИИ ---
-    # Создаем копию ТЕКУЩЕГО состояния чата для передачи ИИ
     context_for_ai = list(current_chat_state)
 
-    # Добавляем результаты поиска как системное сообщение ПЕРЕД последним запросом пользователя
-    if search_results_str and "Не удалось" not in search_results_str and "не найдено" not in search_results_str:
+    # Проверяем, что поиск был успешным и что-то вернул (не сообщение об ошибке/отсутствии)
+    is_search_successful = not ("Не удалось" in search_results_str or "не найдено" in search_results_str)
+
+    if is_search_successful and search_results_str:
         search_context_message = {
             "role": "system",
             "content": (
-                f"{search_results_str}\n\n"
-                "Инструкция: Выше приведены актуальные результаты веб-поиска по последнему запросу пользователя. "
-                "Используй эту информацию, ЕСЛИ ОНА РЕЛЕВАНТНА И ПОЛЕЗНА, чтобы сформировать наиболее точный и актуальный ответ. "
-                "Если результаты поиска нерелевантны или не нужны для ответа на конкретный вопрос, проигнорируй их. "
-                "Отвечай на запрос пользователя:"
+                f"Ниже приведены результаты веб-поиска по последнему запросу пользователя. Проанализируй их.\n\n"
+                # Убрали разделители из search_results_str, добавляем их здесь
+                f"{search_results_str}\n--- Конец результатов ---\n\n"
+                "Инструкция: Используй информацию из этих результатов, если она напрямую относится к вопросу пользователя и помогает дать более точный, полный и актуальный ответ. "
+                "Цитировать результаты дословно не нужно, интегрируй полезную информацию в свой ответ естественно. "
+                "Если результаты нерелевантны или не несут ценности для ответа, проигнорируй их. "
+                "Теперь ответь на основной запрос пользователя:"
             )
         }
-        # Вставляем перед последним сообщением пользователя
         context_for_ai.insert(-1, search_context_message)
-    elif search_results_str: # Если поиск не удался или ничего не нашел, можно добавить уведомление
+    elif search_results_str: # Если поиск не удался или ничего не нашел, но вернул сообщение
          search_context_message = {
             "role": "system",
-             "content": f"({search_results_str}) Отвечай на запрос пользователя:"
+             "content": f"(Примечание: {search_results_str}) Отвечай на запрос пользователя:"
          }
          context_for_ai.insert(-1, search_context_message)
-
+    # Если search_results_str пустой (маловероятно, но на всякий случай), ничего не добавляем
 
     # --- Отображение ответа ИИ ---
-    # Используем контейнер, чтобы новые сообщения добавлялись в правильное место
     with chat_display_container:
         with st.chat_message("assistant", avatar="🤖"):
-            # Используем МОДИФИЦИРОВАННЫЙ контекст для получения ответа
             response_generator = stream_ai_response(current_model_id, context_for_ai)
             full_response = st.write_stream(response_generator)
 
     # --- Сохранение ответа ИИ ---
-    # Проверяем, что ответ не пустой и не None (в случае ошибок стриминга)
     if full_response:
-        # Добавляем ответ ассистента в ОРИГИНАЛЬНУЮ историю в session_state
         st.session_state.all_chats[active_chat_name].append({"role": "assistant", "content": full_response})
         save_all_chats(st.session_state.all_chats, active_chat_name)
-        # st.rerun() здесь НЕ нужен, так как write_stream уже обновил вывод
-
-    # Если стриминг вернул None или пустую строку (из-за ошибки), rerun не делаем,
-    # ошибки уже должны были быть показаны через st.error в stream_ai_response
 
 # --- Футер ---
 # Убран
