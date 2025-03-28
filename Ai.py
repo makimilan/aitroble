@@ -1,3 +1,73 @@
+# --- Пользовательский CSS (Финальная попытка темной темы) ---
+custom_css = f"""
+<style>
+    /* --- Базовая темная тема --- */
+    body {{ color: #dcddde; }} /* Светлый текст по умолчанию */
+    .stApp {{ background-color: #36393f; }} /* Темно-серый фон */
+
+    /* --- Убираем лишние отступы --- */
+     .main .block-container {{ padding: 1rem 1rem 4rem 1rem !important; }} /* Увеличил нижний отступ */
+
+    /* --- Поле ввода --- */
+    .stChatFloatingInputContainer {{ background-color: #40444b !important; border-top: 1px solid #2f3136 !important; }}
+    .stChatFloatingInputContainer textarea {{ background-color: #40444b !important; color: #dcddde !important; border: none !important; }}
+    .stChatFloatingInputContainer button[data-testid="send-button"] svg {{ fill: #7289da !important; }}
+
+    /* --- *СУПЕР ИСПРАВЛЕННЫЕ* Стили чата --- */
+    [data-testid="stChatMessage"] {{
+        background: none !important; /* Убираем фон */
+        border: none !important; /* Убираем границу */
+        box-shadow: none !important; /* Убираем тень */
+        padding: 0.25rem 0 !important; /* Вертикальные отступы */
+        margin-bottom: 0.75rem !important; /* Отступ между сообщениями */
+        max-width: 100%;
+    }}
+     /* Контейнер аватара и контента */
+     [data-testid="stChatMessage"] > div {{
+        display: flex;
+        align-items: flex-start; /* Выравниваем аватар и текст по верху */
+        gap: 0.75rem; /* Отступ между аватаром и текстом */
+     }}
+     /* Контейнер контента внутри сообщения */
+    [data-testid="stChatMessage"] .stChatMessageContent {{
+         background: none !important; /* Убираем фон */
+         color: #dcddde !important; /* Яркий текст */
+         padding: 0 !important; /* Убираем внутренние отступы */
+    }}
+    [data-testid="stChatMessage"] .stChatMessageContent p {{ margin-bottom: 0.2rem; }}
+
+    /* Аватары */
+    [data-testid="chatAvatarIcon-assistant"] svg,
+    [data-testid="chatAvatarIcon-user"] svg {{
+         color: #7289da; /* Цвет иконки аватара */
+         width: 1.75rem; /* Увеличим размер аватара */
+         height: 1.75rem;
+         margin-top: 2px; /* Небольшой отступ сверху для выравнивания */
+    }}
+
+    /* --- Темные блоки кода (без изменений) --- */
+    [data-testid="stChatMessage"] code {{ background-color: #282c34; color: #abb2bf; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; word-wrap: break-word; }}
+    [data-testid="stChatMessage"] pre {{ background-color: #282c34; border: 1px solid #3b4048; border-radius: 5px; padding: 12px; overflow-x: auto; font-size: 0.9em; }}
+    [data-testid="stChatMessage"] pre code {{ background-color: transparent; color: #abb2bf; padding: 0; font-size: inherit; border-radius: 0; }}
+
+    /* --- Стили Сайдбара (без изменений) --- */
+    [data-testid="stSidebar"] {{ background-color: #2f3136; padding: 1rem; }}
+    [data-testid="stSidebar"] h2 {{ text-align: center; margin-bottom: 1rem; font-size: 1.5rem; color: #ffffff; }}
+    [data-testid="stSidebar"] .stButton button {{ border-radius: 5px; width: 100%; margin-bottom: 0.5rem; background-color: #40444b; border: none; color: #dcddde; }}
+    [data-testid="stSidebar"] .stButton button:hover {{ background-color: #4f545c; }}
+    div[data-testid="stSidebar"] div[role="radiogroup"] > label {{ display: block; padding: 8px 12px; border-radius: 5px; margin-bottom: 5px; cursor: pointer; transition: background-color 0.2s ease; border: 1px solid transparent; color: #b9bbbe; }}
+    div[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {{ background-color: rgba(255, 255, 255, 0.05); }}
+    div[data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"]:checked + label {{ background-color: #3a3d43; border: 1px solid #3a3d43; font-weight: 500; color: #ffffff; }}
+    [data-testid="stSidebar"] .stRadio [data-testid="stWidgetLabel"] {{ color: #b9bbbe; font-size: 0.9rem; margin-bottom: 0.3rem; }}
+
+</style>
+"""
+
+# --- Весь остальной код Python остается БЕЗ ИЗМЕНЕНИЙ ---
+
+# ... (вставьте сюда весь остальной код Python из предыдущего ответа) ...
+
+# Вот он еще раз для полноты:
 # -*- coding: utf-8 -*-
 import streamlit as st
 import requests
@@ -32,61 +102,10 @@ st.set_page_config(
 # --- Инициализация LocalStorage ---
 localS = LocalStorage()
 
-# --- Пользовательский CSS (Улучшенная темная тема + стили чата) ---
-custom_css = f"""
-<style>
-    /* --- Базовая темная тема --- */
-    body {{ color: #dcddde; }}
-    .stApp {{ background-color: #36393f; }}
-
-    /* --- Убираем лишние отступы --- */
-     .main .block-container {{ padding: 1rem 1rem 3.5rem 1rem; }}
-
-    /* --- Поле ввода --- */
-    .stChatFloatingInputContainer {{ background-color: #40444b; border-top: 1px solid #2f3136; }}
-    .stChatFloatingInputContainer textarea {{ background-color: #40444b; color: #dcddde; border: none; }}
-    .stChatFloatingInputContainer button[data-testid="send-button"] svg {{ fill: #7289da; }}
-
-    /* --- *ИСПРАВЛЕННЫЕ* Стили чата --- */
-    [data-testid="stChatMessage"] {{
-        background-color: transparent !important; /* Убираем фон сообщения */
-        border: none !important; /* Убираем границу сообщения */
-        box-shadow: none !important; /* Убираем тень */
-        padding: 0.25rem 0 !important; /* Уменьшаем вертикальные отступы */
-        margin-bottom: 0.5rem !important; /* Умеренный отступ между сообщениями */
-        max-width: 100%;
-    }}
-     /* Контейнер контента внутри сообщения */
-    [data-testid="stChatMessage"] .stChatMessageContent {{
-         background-color: transparent !important; /* Убедимся, что и здесь нет фона */
-         color: #dcddde !important; /* Яркий текст */
-    }}
-    [data-testid="stChatMessage"] .stChatMessageContent p {{ margin-bottom: 0.2rem; }}
-
-    /* Аватары */
-    [data-testid="chatAvatarIcon-assistant"] svg,
-    [data-testid="chatAvatarIcon-user"] svg {{
-         /* color: #7289da; */ /* Можно раскомментировать для цвета аватара */
-    }}
-
-    /* --- Темные блоки кода (без изменений) --- */
-    [data-testid="stChatMessage"] code {{ background-color: #282c34; color: #abb2bf; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; word-wrap: break-word; }}
-    [data-testid="stChatMessage"] pre {{ background-color: #282c34; border: 1px solid #3b4048; border-radius: 5px; padding: 12px; overflow-x: auto; font-size: 0.9em; }}
-    [data-testid="stChatMessage"] pre code {{ background-color: transparent; color: #abb2bf; padding: 0; font-size: inherit; border-radius: 0; }}
-
-    /* --- Стили Сайдбара (без изменений) --- */
-    [data-testid="stSidebar"] {{ background-color: #2f3136; padding: 1rem; }}
-    [data-testid="stSidebar"] h2 {{ text-align: center; margin-bottom: 1rem; font-size: 1.5rem; color: #ffffff; }}
-    [data-testid="stSidebar"] .stButton button {{ border-radius: 5px; width: 100%; margin-bottom: 0.5rem; background-color: #40444b; border: none; color: #dcddde; }}
-    [data-testid="stSidebar"] .stButton button:hover {{ background-color: #4f545c; }}
-    div[data-testid="stSidebar"] div[role="radiogroup"] > label {{ display: block; padding: 8px 12px; border-radius: 5px; margin-bottom: 5px; cursor: pointer; transition: background-color 0.2s ease; border: 1px solid transparent; color: #b9bbbe; }}
-    div[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {{ background-color: rgba(255, 255, 255, 0.05); }}
-    div[data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"]:checked + label {{ background-color: #3a3d43; border: 1px solid #3a3d43; font-weight: 500; color: #ffffff; }}
-    [data-testid="stSidebar"] .stRadio [data-testid="stWidgetLabel"] {{ color: #b9bbbe; font-size: 0.9rem; margin-bottom: 0.3rem; }}
-
-</style>
-"""
+# --- Пользовательский CSS (ВСТАВЬТЕ ОБНОВЛЕННЫЙ БЛОК СЮДА) ---
+# custom_css = f""" ... """ # <--- Сюда вставляется CSS выше
 st.markdown(custom_css, unsafe_allow_html=True)
+
 
 # --- Функции для работы с чатами (без изменений) ---
 def load_all_chats():
@@ -254,8 +273,8 @@ if active_chat_history and active_chat_history[-1]["role"] == "user":
      if full_response:
          active_chat_history.append({"role": "assistant", "content": full_response})
          st.session_state.all_chats[active_chat_name] = active_chat_history
-         save_all_chats(st.session_state.all_chats, st.session_state.active_chat)
-         # st.rerun() # Не нужен после write_stream
+         save_all_chats(st.session_state.all_chats, active_chat_name)
+         # st.rerun() не нужен
 
 # --- Футер ---
 # Убран
