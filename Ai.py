@@ -13,42 +13,46 @@ from streamlit_local_storage import LocalStorage
 
 # --- Константы ---
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL_V3_NAME = "Стандарт (V3)"
-MODEL_V3_ID = "deepseek/deepseek-chat-v3-0324:free"
-MODEL_R1_NAME = "DeepThink (R1)"
-MODEL_R1_ID = "deepseek/deepseek-r1:free"
-LOCAL_STORAGE_KEY = "multi_chat_storage_v5" # Снова обновил ключ
+# Определяем режимы и соответствующие модели
+MODES = {
+    "Стандарт (V3)": "deepseek/deepseek-chat-v3-0324:free",
+    "DeepThink (R1)": "deepseek/deepseek-r1:free",
+}
+DEFAULT_MODE = "Стандарт (V3)" # Режим по умолчанию
+LOCAL_STORAGE_KEY = "multi_chat_storage_v6" # Снова обновил ключ
 DEFAULT_CHAT_NAME = "Новый чат"
 
 # --- Настройка страницы ---
 st.set_page_config(
-    page_title="Чат с ИИ", # Более простое название
+    page_title="Чат с ИИ",
     page_icon="💬",
-    layout="wide", # Снова широкий макет
-    initial_sidebar_state="expanded" # Сайдбар открыт по умолчанию
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # --- Инициализация LocalStorage ---
 localS = LocalStorage()
 
-# --- Пользовательский CSS (Возвращаем стили для сайдбара) ---
+# --- Пользовательский CSS (Улучшенная темная тема) ---
 custom_css = f"""
 <style>
-    /* --- Базовая темная тема (лучше настроить в config.toml) --- */
-    /* body {{ background-color: #2f3136; color: #dcddde; }} */
+    /* --- Базовая темная тема --- */
+    body {{
+        color: #dcddde; /* Светлый текст по умолчанию */
+    }}
+    /* Основной контейнер приложения */
+    .stApp {{
+         background-color: #36393f; /* Темно-серый фон (как Discord) */
+    }}
 
     /* --- Убираем лишние отступы --- */
      .main .block-container {{
-        padding-top: 1rem;
-        padding-bottom: 3.5rem;
-        padding-left: 1rem; /* Уменьшаем боковые отступы */
-        padding-right: 1rem;
+        padding-top: 1rem; padding-bottom: 3.5rem; padding-left: 1rem; padding-right: 1rem;
     }}
 
     /* --- Стили чата --- */
     .stChatFloatingInputContainer {{ /* Поле ввода */
-        background-color: #40444b; /* Темно-серый фон поля ввода */
-        border-top: 1px solid #2f3136;
+        background-color: #40444b; border-top: 1px solid #2f3136;
     }}
     .stChatFloatingInputContainer textarea {{
         background-color: #40444b; color: #dcddde; border: none;
@@ -56,8 +60,13 @@ custom_css = f"""
      .stChatFloatingInputContainer button[data-testid="send-button"] svg {{ fill: #7289da; }}
 
     [data-testid="stChatMessage"] {{ /* Сообщения */
-        background-color: transparent; border-radius: 0; padding: 5px 0;
-        margin-bottom: 0; box-shadow: none; max-width: 100%;
+        background-color: transparent !important; /* Убираем фон */
+        border-radius: 0; padding: 5px 0; margin-bottom: 0; box-shadow: none; max-width: 100%;
+    }}
+     /* Аватар и текст сообщения */
+    [data-testid="stChatMessage"] [data-testid="chatAvatarIcon-assistant"] svg,
+    [data-testid="stChatMessage"] [data-testid="chatAvatarIcon-user"] svg {{
+         color: #7289da; /* Цвет иконки аватара */
     }}
     [data-testid="stChatMessageContent"] {{ color: #dcddde; }}
     [data-testid="stChatMessageContent"] p {{ margin-bottom: 0.2rem; }}
@@ -69,34 +78,40 @@ custom_css = f"""
 
     /* --- Стили Сайдбара --- */
     [data-testid="stSidebar"] {{
-        /* background-color: #2f3136; */ /* Фон сайдбара */
+        background-color: #2f3136; /* Фон сайдбара (как основной) */
         padding: 1rem;
     }}
-    [data-testid="stSidebar"] h2 {{ /* Заголовок "Чаты" */
+    [data-testid="stSidebar"] h2 {{
         text-align: center; margin-bottom: 1rem; font-size: 1.5rem; color: #ffffff;
     }}
     /* Кнопки в сайдбаре */
     [data-testid="stSidebar"] .stButton button {{
-        border-radius: 8px; width: 100%; margin-bottom: 0.5rem;
-        /* background-color: #40444b; border: none; color: #dcddde; */ /* Пример стиля кнопок */
+        border-radius: 5px; width: 100%; margin-bottom: 0.5rem;
+        background-color: #40444b; border: none; color: #dcddde;
     }}
-     /* Стиль для списка чатов (радио) */
+     [data-testid="stSidebar"] .stButton button:hover {{
+        background-color: #4f545c; /* Чуть светлее при наведении */
+     }}
+     /* Радио-кнопки (для чатов и режима) */
     div[data-testid="stSidebar"] div[role="radiogroup"] > label {{
-        display: block; padding: 8px 12px; border-radius: 8px; margin-bottom: 5px;
+        display: block; padding: 8px 12px; border-radius: 5px; margin-bottom: 5px;
         cursor: pointer; transition: background-color 0.2s ease; border: 1px solid transparent;
-        color: #dcddde; /* Цвет текста чатов */
+        color: #b9bbbe; /* Серый текст для неактивных */
     }}
     div[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {{ background-color: rgba(255, 255, 255, 0.05); }}
-    /* Выбранный чат */
+    /* Выбранный элемент радио */
     div[data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"]:checked + label {{
-        background-color: rgba(114, 137, 218, 0.2); /* Discord фиолетовый полупрозрачный */
-        border: 1px solid rgba(114, 137, 218, 0.3);
-        font-weight: bold;
+        background-color: #3a3d43; /* Темно-серый фон для активного */
+        border: 1px solid #3a3d43;
+        font-weight: 500; /* Полужирный */
+        color: #ffffff; /* Белый текст для активного */
     }}
-     /* Переключатель режима */
-     [data-testid="stSidebar"] [data-testid="stToggle"] label {{
-        display: flex; align-items: center; cursor: pointer; color: #b9bbbe; padding: 5px 0;
-    }}
+     /* Заголовок для радио выбора режима */
+     [data-testid="stSidebar"] .stRadio [data-testid="stWidgetLabel"] {{
+        color: #b9bbbe;
+        font-size: 0.9rem;
+        margin-bottom: 0.3rem;
+     }}
 
 </style>
 """
@@ -139,8 +154,9 @@ if "all_chats" not in st.session_state:
             st.session_state.all_chats = {new_name: []}
             st.session_state.active_chat = new_name
             save_all_chats(st.session_state.all_chats, st.session_state.active_chat)
-if "thinking_enabled" not in st.session_state:
-    st.session_state.thinking_enabled = False
+# Инициализация выбранного режима
+if "selected_mode" not in st.session_state:
+    st.session_state.selected_mode = DEFAULT_MODE
 
 # --- Сайдбар: Управление чатами и режимом ---
 with st.sidebar:
@@ -149,9 +165,10 @@ with st.sidebar:
     try: active_chat_index = chat_names.index(st.session_state.active_chat)
     except ValueError: active_chat_index = 0
 
+    # --- Выбор чата ---
     selected_chat = st.radio(
         "Выберите чат:", options=chat_names, index=active_chat_index,
-        label_visibility="collapsed"
+        label_visibility="collapsed", key="chat_selector" # Добавил ключ на всякий случай
     )
 
     if selected_chat != st.session_state.active_chat:
@@ -161,8 +178,8 @@ with st.sidebar:
 
     st.divider()
 
-    # Кнопки управления чатами
-    if st.button("➕ Новый чат"):
+    # --- Кнопки управления чатами ---
+    if st.button("➕ Новый чат", key="new_chat_button"):
         new_name = generate_new_chat_name(chat_names)
         st.session_state.all_chats[new_name] = []
         st.session_state.active_chat = new_name
@@ -170,7 +187,7 @@ with st.sidebar:
         st.rerun()
 
     if len(chat_names) > 0:
-        if st.button("🗑️ Удалить текущий чат", type="secondary"):
+        if st.button("🗑️ Удалить текущий чат", type="secondary", key="delete_chat_button"):
             if st.session_state.active_chat in st.session_state.all_chats:
                 del st.session_state.all_chats[st.session_state.active_chat]
                 remaining_chats = list(st.session_state.all_chats.keys())
@@ -184,30 +201,39 @@ with st.sidebar:
 
     st.divider()
 
-    # Переключатель режима
-    st.session_state.thinking_enabled = st.toggle(
-        f"Режим: {MODEL_R1_NAME if st.session_state.thinking_enabled else MODEL_V3_NAME}",
-        value=st.session_state.thinking_enabled,
-        help="Включено - DeepThink (R1), Выключено - Стандарт (V3)"
+    # --- Выбор режима через Radio ---
+    mode_options = list(MODES.keys())
+    try: current_mode_index = mode_options.index(st.session_state.selected_mode)
+    except ValueError: current_mode_index = 0 # Если сохраненный режим невалиден
+
+    selected_mode_radio = st.radio(
+        "Режим работы:",
+        options=mode_options,
+        index=current_mode_index,
+        key="mode_selector" # Добавил ключ
     )
+    # Если режим изменился, сохраняем его в session_state
+    if selected_mode_radio != st.session_state.selected_mode:
+        st.session_state.selected_mode = selected_mode_radio
+        # Rerun не обязателен, т.к. режим используется при следующем запросе, но можно добавить для немедленного обновления UI
+        st.rerun()
 
 # --- Основная область: Чат ---
 
-# Определяем активную модель
-is_thinking_enabled = st.session_state.get("thinking_enabled", False)
-current_model_name = MODEL_R1_NAME if is_thinking_enabled else MODEL_V3_NAME
-current_model_id = MODEL_R1_ID if is_thinking_enabled else MODEL_V3_ID
+# Определяем активную модель на основе выбранного режима
+current_mode_name = st.session_state.get("selected_mode", DEFAULT_MODE)
+current_model_id = MODES.get(current_mode_name, MODES[DEFAULT_MODE])
 
 # Отображение сообщений АКТИВНОГО чата
 current_messages = st.session_state.all_chats.get(st.session_state.active_chat, [])
 if not current_messages:
      current_messages.append(
-         {"role": "assistant", "content": f"👋 Привет! Я {current_model_name}. Начнем новый чат!"}
+         {"role": "assistant", "content": f"👋 Привет! Я {current_mode_name}. Начнем новый чат!"}
      )
      st.session_state.all_chats[st.session_state.active_chat] = current_messages
      save_all_chats(st.session_state.all_chats, st.session_state.active_chat)
 
-# Контейнер для сообщений (для возможной прокрутки в будущем)
+# Контейнер для сообщений
 chat_display_container = st.container()
 with chat_display_container:
     for message in current_messages:
@@ -217,6 +243,7 @@ with chat_display_container:
 
 # --- Функция стриминга (без изменений) ---
 def stream_ai_response(model_id_func, chat_history_func):
+    # ... (код функции остается тем же) ...
     try:
         if "OPENROUTER_API_KEY" not in st.secrets:
              st.error("⛔ Секрет 'OPENROUTER_API_KEY' не найден.", icon="🚨")
@@ -247,23 +274,23 @@ def stream_ai_response(model_id_func, chat_history_func):
                         delta_content = chunk.get("choices", [{}])[0].get("delta", {}).get("content")
                         if delta_content: yield delta_content
                     except: continue
-    except requests.exceptions.RequestException as e: yield None # Ошибка API/Сети
-    except Exception as e: yield None # Другая ошибка
+    except requests.exceptions.RequestException as e: yield None
+    except Exception as e: yield None
+
 
 # --- Поле ввода пользователя ---
-if prompt := st.chat_input(f"Спроси {current_model_name}..."):
+if prompt := st.chat_input(f"Спроси {current_mode_name}..."):
 
     active_chat_name = st.session_state.active_chat
     active_chat_history = st.session_state.all_chats.get(active_chat_name, [])
     active_chat_history.append({"role": "user", "content": prompt})
     st.session_state.all_chats[active_chat_name] = active_chat_history
     save_all_chats(st.session_state.all_chats, active_chat_name)
-    st.rerun() # Перерисовываем, чтобы показать сообщение пользователя
+    st.rerun()
 
 # --- Логика ответа ИИ (после rerun) ---
 active_chat_history = st.session_state.all_chats.get(st.session_state.active_chat, [])
 if active_chat_history and active_chat_history[-1]["role"] == "user":
-     # Используем контейнер, чтобы новые сообщения добавлялись в правильное место
      with chat_display_container:
          with st.chat_message("assistant", avatar="🐳"):
              full_response = st.write_stream(stream_ai_response(current_model_id, active_chat_history))
@@ -272,7 +299,7 @@ if active_chat_history and active_chat_history[-1]["role"] == "user":
          active_chat_history.append({"role": "assistant", "content": full_response})
          st.session_state.all_chats[st.session_state.active_chat] = active_chat_history
          save_all_chats(st.session_state.all_chats, st.session_state.active_chat)
-         # Не нужен rerun после write_stream, он сам обновляет плейсхолдер
+         # st.rerun() # Не нужен после write_stream
 
 # --- Футер ---
 # Убран
