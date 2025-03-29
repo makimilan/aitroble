@@ -68,9 +68,25 @@ st.set_page_config(
 )
 
 # --- Упрощенный и исправленный CSS ---
-# Убраны многие агрессивные стили, которые могли конфликтовать с Streamlit
 st.markdown("""
 <style>
+    /* Скрытие стандартных элементов Streamlit */
+    /* Убираем верхний хедер (с кнопкой Share и т.д.) */
+    [data-testid="stHeader"] {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    /* Убираем нижний виджет статуса (с "Manage app") */
+    [data-testid="stStatusWidget"] {
+        display: none !important;
+        visibility: hidden !important;
+    }
+     /* Можно также скрыть стандартный футер Streamlit, если он появляется */
+    footer {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
     /* Общие отступы */
     .main .block-container {
         padding-top: 1.5rem;
@@ -81,11 +97,10 @@ st.markdown("""
 
     /* Стилизация сообщений чата (минимальная) */
     [data-testid="stChatMessage"] {
-        /* background-color: rgba(0, 0, 0, 0.03); убрано для совместимости с темами */
         border-radius: 0.5rem;
         padding: 0.7rem 1rem !important;
         margin-bottom: 1rem !important;
-        border: 1px solid rgba(0, 0, 0, 0.08); /* Тонкая граница */
+        border: 1px solid rgba(128, 131, 141, 0.2); /* Нейтральная граница для темной/светлой темы */
     }
     [data-testid="stChatMessage"] > div { /* Контейнер аватара и контента */
         gap: 0.75rem;
@@ -97,7 +112,6 @@ st.markdown("""
     /* Сайдбар */
     [data-testid="stSidebar"] {
         padding: 1.5rem 1rem;
-        /* background-color: #f8f9fa; Убрано, чтобы не конфликтовать с темой */
     }
     [data-testid="stSidebar"] h2 { /* Заголовок Управление чатами */
         text-align: center;
@@ -109,61 +123,57 @@ st.markdown("""
         margin-bottom: 0.5rem;
         font-size: 1.1rem;
     }
-    /* Кнопки в сайдбаре (осторожно) */
+    /* Кнопки в сайдбаре */
     [data-testid="stSidebar"] .stButton button {
         width: 100%;
         margin-bottom: 0.6rem;
         border-radius: 0.3rem;
         font-weight: 500;
-        /* Не переопределяем фон/цвет, чтобы работали стандартные типы кнопок */
     }
-    /* Кнопка удаления - используем стандартный secondary тип Streamlit */
-    /* Дополнительные стили для нее убраны, чтобы не ломать */
 
-    /* Виджеты в сайдбаре (очень осторожно) */
+    /* Виджеты в сайдбаре */
     [data-testid="stSidebar"] .stRadio [data-testid="stWidgetLabel"],
-    [data-testid="stSidebar"] [data-testid="stToggle"] label[data-baseweb="checkbox"] > div:first-child { /* Целимся точнее в лейбл toggle */
-        font-size: 1rem; /* Стандартный размер */
+    [data-testid="stSidebar"] [data-testid="stToggle"] label[data-baseweb="checkbox"] > div:first-child {
+        font-size: 1rem;
         font-weight: 600;
         margin-bottom: 0.4rem;
-        display: block; /* Убедимся, что лейбл занимает всю ширину */
+        display: block;
     }
      [data-testid="stSidebar"] [data-testid="stToggle"] {
-         margin-top: 1rem; /* Добавим отступ сверху для toggle */
+         margin-top: 1rem;
      }
 
-    /* Поле ввода - УБРАНО position: fixed, т.к. оно часто вызывает проблемы */
+    /* Поле ввода */
     [data-testid="stChatInput"] {
-      /* background-color: #ffffff; */ /* Убрано для совместимости с темами */
-      border-top: 1px solid rgba(0, 0, 0, 0.1); /* Граница сверху */
+      border-top: 1px solid rgba(128, 131, 141, 0.2); /* Нейтральная граница */
       padding: 1rem 1.5rem;
-      /* position: fixed; */ /* УБРАНО */
-      /* bottom: 0; */
-      /* left: 0; */
-      /* right: 0; */
-      /* z-index: 100; */
-      /* box-shadow: 0 -2px 5px rgba(0,0,0,0.05); */ /* Убрана тень */
     }
 
-    /* Стили для markdown внутри сообщений (оставлены) */
+    /* Стили для markdown внутри сообщений */
     .stChatMessageContent code {
-        background-color: rgba(0,0,0,0.06);
+        background-color: rgba(128, 131, 141, 0.15); /* Нейтральный фон */
         padding: 0.2em 0.4em;
         border-radius: 3px;
         font-size: 85%;
     }
-    .stChatMessageContent pre code {
-        background-color: #f1f3f5;
-        border: 1px solid #dee2e6;
-        display: block;
+    .stChatMessageContent pre { /* Стиль для блока кода */
+        background-color: rgba(128, 131, 141, 0.1);
+        border: 1px solid rgba(128, 131, 141, 0.2);
+        border-radius: 0.3rem;
         padding: 0.5rem 0.7rem;
         overflow-x: auto;
+    }
+    .stChatMessageContent pre code { /* Убираем доп. фон у кода внутри pre */
+         background-color: transparent;
+         padding: 0;
+         border-radius: 0;
+         font-size: inherit; /* Наследуем размер шрифта от pre */
     }
     .stChatMessageContent blockquote {
         border-left: 3px solid #adb5bd;
         padding-left: 1rem;
         margin-left: 0;
-        color: #6c757d;
+        color: #6c757d; /* Можно оставить или сделать динамическим */
     }
 </style>
 """, unsafe_allow_html=True)
@@ -180,7 +190,7 @@ try:
     logger.info("LocalStorage инициализирован успешно.")
 except Exception as e:
     logger.error(f"Критическая ошибка инициализации LocalStorage: {e}", exc_info=True)
-    st.error("Не удалось инициализировать локальное хранилище. История чатов не будет сохраняться между сессиями.", icon="🚨")
+    st.error("Не удалось инициализировать локальное хранилище.", icon="🚨")
     localS = None
 
 # --- Функции для работы с чатами (без изменений) ---
@@ -484,12 +494,11 @@ if active_chat_name not in all_chats_keys:
         save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
     st.rerun()
 
-# --- Сайдбар (исправлены виджеты) ---
+# --- Сайдбар (без изменений в логике) ---
 with st.sidebar:
     st.markdown("## 💬 Управление чатами")
     chat_names = list(st.session_state.all_chats.keys())
 
-    # Выбор активного чата
     try: active_chat_index = chat_names.index(st.session_state.active_chat)
     except ValueError:
         logger.warning(f"Активный чат '{st.session_state.active_chat}' не найден в {chat_names}. Выбран первый.")
@@ -497,13 +506,11 @@ with st.sidebar:
         if chat_names: st.session_state.active_chat = chat_names[0]
         else: logger.error("Критическая ошибка: Нет чатов для выбора."); st.error("Ошибка: Нет чатов."); st.stop()
 
-    # Radio должен теперь отображаться корректно
     selected_chat = st.radio(
-        "Выберите чат:", # Лейбл теперь виден, т.к. стили упрощены
+        "Выберите чат:",
         options=chat_names,
         index=active_chat_index,
         key="chat_selector"
-        # label_visibility="collapsed" # Убрано, т.к. могло вызывать проблемы со стилями
     )
 
     if selected_chat is not None and selected_chat != st.session_state.active_chat:
@@ -512,7 +519,6 @@ with st.sidebar:
         save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
         st.rerun()
 
-    # Кнопки управления чатами
     col1, col2 = st.columns(2)
     with col1:
         if st.button("➕ Новый", key="new_chat_button", help="Создать новый пустой чат", use_container_width=True):
@@ -524,7 +530,6 @@ with st.sidebar:
             st.rerun()
     with col2:
         if chat_names:
-             # Используем стандартный secondary тип для кнопки удаления
             if st.button("🗑️ Удалить", key="delete_chat_button", type="secondary", help="Удалить текущий чат", use_container_width=True):
                 chat_to_delete = st.session_state.active_chat
                 logger.info(f"Удаление чата: {chat_to_delete}")
@@ -544,7 +549,6 @@ with st.sidebar:
 
     st.divider()
 
-    # Переключатель веб-поиска (должен отображаться корректно)
     search_toggled = st.toggle(
         "🌐 Веб-поиск",
         value=st.session_state.web_search_enabled,
@@ -558,7 +562,6 @@ with st.sidebar:
 
     st.divider()
 
-    # Выбор режима (модели) (должен отображаться корректно)
     st.markdown("##### 🧠 Режим ИИ")
     mode_options = list(MODES.keys())
     try: current_mode_index = mode_options.index(st.session_state.selected_mode)
@@ -568,11 +571,10 @@ with st.sidebar:
         current_mode_index = mode_options.index(DEFAULT_MODE)
 
     selected_mode_radio = st.radio(
-        "Выберите модель:", # Лейбл виден
+        "Выберите модель:",
         options=mode_options,
         index=current_mode_index,
         key="mode_selector"
-        # label_visibility="collapsed" # Убрано
     )
     if selected_mode_radio is not None and selected_mode_radio != st.session_state.selected_mode:
         st.session_state.selected_mode = selected_mode_radio
@@ -591,7 +593,7 @@ with chat_container:
         chat_history = st.session_state.all_chats[current_active_chat_name]
         for i, message in enumerate(chat_history):
             role = message.get("role"); content = message.get("content")
-            avatar = "🧑‍💻" if role == "user" else "💡" # Возвращен ваш вариант аватара ИИ
+            avatar = "🧑‍💻" if role == "user" else "💡"
             if role and content:
                 with st.chat_message(role, avatar=avatar):
                     st.markdown(content, unsafe_allow_html=True)
@@ -656,7 +658,7 @@ if current_active_chat_name in st.session_state.all_chats:
         logger.info(">>> Запрос и стриминг ответа ИИ.")
         final_response_to_save: Optional[str] = None; ai_response_error: bool = False; full_response_chunks: List[str] = []
         try:
-            with st.chat_message("assistant", avatar="💡"): # Возвращен ваш аватар
+            with st.chat_message("assistant", avatar="💡"):
                 message_placeholder = st.empty()
                 message_placeholder.markdown("Генерирую ответ... ⏳")
                 response_generator = stream_ai_response(current_model_id, context_for_ai)
@@ -681,7 +683,6 @@ if current_active_chat_name in st.session_state.all_chats:
             try:
                 if current_active_chat_name in st.session_state.all_chats:
                      assistant_message: Dict[str, str] = {"role": "assistant", "content": final_response_to_save}
-                     # Проверка на дубликат перед добавлением
                      if not current_chat_history or current_chat_history[-1] != assistant_message:
                           st.session_state.all_chats[current_active_chat_name].append(assistant_message)
                           save_all_chats(st.session_state.all_chats, current_active_chat_name, st.session_state.web_search_enabled)
@@ -694,6 +695,3 @@ if current_active_chat_name in st.session_state.all_chats:
         elif not final_response_to_save: logger.warning("Пустой ответ ИИ не сохранен.")
 
         logger.info(f"--- Обработка ответа ИИ для '{current_active_chat_name}' завершена ---")
-
-# Добавляем небольшой отступ снизу (опционально, т.к. убрали fixed input)
-# st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
