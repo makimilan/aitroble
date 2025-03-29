@@ -109,19 +109,14 @@ def save_all_chats(chats_dict, active_chat_name, web_search_state):
     try: localS.setItem(LOCAL_STORAGE_KEY, json.dumps(data_to_save)); logging.info(f"Чаты сохранены."); return True
     except Exception as e: logging.error(f"Ошибка сохранения чатов: {e}", exc_info=True); st.toast("Ошибка сохранения!", icon="🚨"); return False
 
-# === ИСПРАВЛЕННАЯ ФУНКЦИЯ ===
 def generate_new_chat_name(existing_names):
     i = 1
     base_name = DEFAULT_CHAT_NAME
-    # Цикл для поиска уникального имени
     while f"{base_name} {i}" in existing_names:
         i += 1
-    # Возвращаем найденное уникальное имя
     return f"{base_name} {i}"
-# === КОНЕЦ ИСПРАВЛЕННОЙ ФУНКЦИИ ===
 
 # --- Функции поиска и генерации запросов ---
-# (generate_search_queries, clean_html, perform_web_search - без изменений с v15)
 def generate_search_queries(user_prompt, model_id):
     headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}","Content-Type": "application/json","HTTP-Referer": "http://localhost:8501","X-Title": "Streamlit Improved Search Chat AI"}
     current_date_str = datetime.datetime.now().strftime('%d %B %Y')
@@ -158,19 +153,38 @@ def perform_web_search(queries: list, max_results_per_query=MAX_SEARCH_RESULTS_P
                     aggregated_results.extend(search_results); logging.info(f"    Найдено {len(search_results)} для '{query}'.")
                 except Exception as e: logging.error(f"    Ошибка поиска по '{query}': {e}", exc_info=True); search_errors.append(query)
         if search_errors: st.toast(f"Проблемы при поиске: {', '.join(search_errors)}", icon="🕸️")
+
         if aggregated_results:
+            # Отбираем уникальные результаты по тексту (body)
             unique_results_dict = {}
-            for res in aggregated_results: body = res.get('body'); if body and body not in unique_results_dict: unique_results_dict[body] = res
-            unique_results = list(unique_results_dict.values()); logging.info(f"Уникальных результатов: {len(unique_results)}")
+            for res in aggregated_results:
+                body = res.get('body')
+                # === ИСПРАВЛЕННЫЙ БЛОК ===
+                # Добавляем результат, только если есть тело и оно еще не встречалось
+                if body and body not in unique_results_dict:
+                    unique_results_dict[body] = res
+            # === КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ===
+
+            unique_results = list(unique_results_dict.values())
+            logging.info(f"Уникальных результатов после фильтрации: {len(unique_results)}")
+
             if unique_results:
                 result_lines = [f"{i}. {res.get('title', 'Без заголовка')}: {(res.get('body', '')[:MAX_SNIPPET_LENGTH] + '...') if len(res.get('body', '')) > MAX_SNIPPET_LENGTH else res.get('body', '')}" for i, res in enumerate(unique_results, 1)]
                 all_results_text = "--- Результаты веб-поиска ---\n" + "\n\n".join(result_lines)
-            else: all_results_text = "Не найдено уникальных результатов."; logging.info(all_results_text)
-        else: all_results_text = "Поиск не дал результатов."; logging.info(all_results_text)
+            else:
+                all_results_text = "Не найдено уникальных результатов после фильтрации."
+                logging.info(all_results_text)
+        else:
+            all_results_text = "Поиск не дал результатов."
+            logging.info(all_results_text)
         return all_results_text.strip()
-    except Exception as e: logging.error(f"Критическая ошибка веб-поиска: {e}", exc_info=True); st.error(f"Ошибка веб-поиска: {e}", icon="🕸️"); return f"Критическая ошибка веб-поиска: {e}"
+    except Exception as e:
+        logging.error(f"Критическая ошибка веб-поиска: {e}", exc_info=True)
+        st.error(f"Ошибка веб-поиска: {e}", icon="🕸️")
+        return f"Критическая ошибка веб-поиска: {e}"
 
-# --- Функция стриминга (без изменений с v15) ---
+
+# --- Функция стриминга ---
 def stream_ai_response(model_id_func, chat_history_func):
     headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}","Content-Type": "application/json","HTTP-Referer": "http://localhost:8501","X-Title": "Streamlit Improved Search Chat AI"}
     if not isinstance(chat_history_func, list): logging.error("Неверный формат истории для стриминга."); yield None; return
@@ -195,13 +209,11 @@ def stream_ai_response(model_id_func, chat_history_func):
 
 
 # --- Инициализация состояния ---
-# (Без изменений)
 if "all_chats" not in st.session_state: logging.info("Инициализация состояния."); st.session_state.all_chats, st.session_state.active_chat = load_all_chats()
 if "selected_mode" not in st.session_state: st.session_state.selected_mode = DEFAULT_MODE
 if "web_search_enabled" not in st.session_state: st.session_state.web_search_enabled = False; logging.warning("web_search_enabled не установлено, -> False.")
 
 # --- Определяем активный чат ---
-# (Без изменений)
 if st.session_state.active_chat not in st.session_state.all_chats:
     logging.warning(f"Активный чат '{st.session_state.active_chat}' не найден.");
     if st.session_state.all_chats: st.session_state.active_chat = list(st.session_state.all_chats.keys())[0]; logging.info(f"Выбран первый: '{st.session_state.active_chat}'")
@@ -209,7 +221,6 @@ if st.session_state.active_chat not in st.session_state.all_chats:
 active_chat_name = st.session_state.active_chat
 
 # --- Сайдбар ---
-# (Без изменений)
 with st.sidebar:
     st.markdown("## 💬 Чаты"); chat_names = list(st.session_state.all_chats.keys())
     if chat_names:
@@ -286,7 +297,6 @@ if active_chat_name in st.session_state.all_chats:
         system_prompt = {"role": "system"}
 
         # --- Этапы поиска (если включен) ---
-        # (Логика поиска и формирования system_prompt без изменений)
         if needs_search:
             logging.info(">>> Веб-поиск включен.")
             generated_queries = []
@@ -317,7 +327,7 @@ if active_chat_name in st.session_state.all_chats:
             context_for_ai.insert(-1, system_prompt)
             logging.info("Системный промпт без поиска.")
 
-        # === НОВЫЙ БЛОК: Стриминг во временный плейсхолдер ===
+        # === БЛОК: Стриминг во временный плейсхолдер ===
         final_response_to_save = None
         ai_response_error = False
         full_response_chunks = []
@@ -327,48 +337,38 @@ if active_chat_name in st.session_state.all_chats:
             response_generator = stream_ai_response(current_model_id, context_for_ai)
 
             with streaming_placeholder.container():
-                 # Используем markdown для стилизации через CSS класс
                  st.markdown('<div class="streaming-placeholder">💡 Ожидаю ответ...</div>', unsafe_allow_html=True)
-                 # Вложенный empty для обновления текста без перерисовки фона/иконки
                  temp_content_placeholder = st.empty()
 
                  for chunk in response_generator:
                       if chunk is None:
                            logging.error("Генератор стриминга вернул ошибку (None).")
                            ai_response_error = True
-                           # Обновляем сообщение об ошибке прямо во временном блоке
                            temp_content_placeholder.error("Ошибка при получении ответа от ИИ!", icon="😔")
                            break
                       if chunk:
                            full_response_chunks.append(chunk)
-                           # Обновляем текст во вложенном плейсхолдере
-                           # Добавляем иконку ассистента перед текстом
                            temp_content_placeholder.markdown("💡 " + "".join(full_response_chunks) + "▌", unsafe_allow_html=True)
 
-            # После завершения стриминга
             if not ai_response_error:
                 final_response_to_save = "".join(full_response_chunks)
                 if final_response_to_save:
                     logging.info("Ответ от ИИ успешно собран.")
                 else:
                     logging.warning("Ответ от ИИ пуст после стриминга.")
-                    # Можно добавить сообщение в плейсхолдер, но он все равно очистится
-                    # temp_content_placeholder.warning("ИИ не предоставил ответ.", icon="🤷")
                     final_response_to_save = None
 
         except Exception as e:
              logging.error(f"Ошибка при стриминге во временный плейсхолдер: {e}", exc_info=True)
-             # Показываем ошибку в основном потоке, т.к. плейсхолдер может быть уже недоступен
              st.error(f"Произошла ошибка при обработке ответа ИИ: {e}", icon="💥")
              final_response_to_save = None
              ai_response_error = True
         finally:
-             # Очищаем временный плейсхолдер
              streaming_placeholder.empty()
              logging.info("Временный плейсхолдер очищен.")
 
 
-        # === НОВЫЙ БЛОК: Сохранение и Перерисовка ===
+        # === БЛОК: Сохранение и Перерисовка ===
         if final_response_to_save and not ai_response_error:
             logging.info("Добавление ответа в историю и запрос на перерисовку...")
             try:
@@ -378,7 +378,7 @@ if active_chat_name in st.session_state.all_chats:
                           current_history_for_save.append({"role": "assistant", "content": final_response_to_save})
                           save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
                           logging.info("Ответ ассистента добавлен и сохранен.")
-                          st.rerun() # Перерисовываем для отображения в основном чате
+                          st.rerun()
                      else:
                           logging.warning("Обнаружено дублирование ответа. Перерисовка не требуется.")
                 else:
