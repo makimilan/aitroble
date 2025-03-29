@@ -25,7 +25,7 @@ MODES = {
     "DeepThink (R1)": "deepseek/deepseek-r1:free",
 }
 DEFAULT_MODE = "Стандарт (V3)"
-LOCAL_STORAGE_KEY = "multi_chat_storage_v16" # Снова сменил ключ
+LOCAL_STORAGE_KEY = "multi_chat_storage_v16"
 DEFAULT_CHAT_NAME = "Новый чат"
 MAX_SEARCH_RESULTS_PER_QUERY = 4
 MAX_QUERIES_TO_GENERATE = 3
@@ -47,7 +47,6 @@ except Exception as e:
     localS = None
 
 # --- Минимальный CSS ---
-# (Оставлен без изменений)
 custom_css = f"""
 <style>
      .main .block-container {{ padding-top: 1rem; padding-bottom: 4rem; padding-left: 1rem; padding-right: 1rem; }}
@@ -79,7 +78,6 @@ if not OPENROUTER_API_KEY:
     st.stop()
 
 # --- Функции для работы с чатами ---
-# (load_all_chats, save_all_chats, generate_new_chat_name - без изменений с v15)
 def load_all_chats():
     default_chats = {f"{DEFAULT_CHAT_NAME} 1": []}; default_name = f"{DEFAULT_CHAT_NAME} 1"; initial_search_state = False
     if not localS: logging.warning("LocalStorage недоступен."); st.session_state.web_search_enabled = initial_search_state; return default_chats, default_name
@@ -111,7 +109,16 @@ def save_all_chats(chats_dict, active_chat_name, web_search_state):
     try: localS.setItem(LOCAL_STORAGE_KEY, json.dumps(data_to_save)); logging.info(f"Чаты сохранены."); return True
     except Exception as e: logging.error(f"Ошибка сохранения чатов: {e}", exc_info=True); st.toast("Ошибка сохранения!", icon="🚨"); return False
 
-def generate_new_chat_name(existing_names): i = 1; base_name = DEFAULT_CHAT_NAME; while f"{base_name} {i}" in existing_names: i += 1; return f"{base_name} {i}"
+# === ИСПРАВЛЕННАЯ ФУНКЦИЯ ===
+def generate_new_chat_name(existing_names):
+    i = 1
+    base_name = DEFAULT_CHAT_NAME
+    # Цикл для поиска уникального имени
+    while f"{base_name} {i}" in existing_names:
+        i += 1
+    # Возвращаем найденное уникальное имя
+    return f"{base_name} {i}"
+# === КОНЕЦ ИСПРАВЛЕННОЙ ФУНКЦИИ ===
 
 # --- Функции поиска и генерации запросов ---
 # (generate_search_queries, clean_html, perform_web_search - без изменений с v15)
@@ -165,7 +172,6 @@ def perform_web_search(queries: list, max_results_per_query=MAX_SEARCH_RESULTS_P
 
 # --- Функция стриминга (без изменений с v15) ---
 def stream_ai_response(model_id_func, chat_history_func):
-    # ... (код stream_ai_response как в предыдущей версии) ...
     headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}","Content-Type": "application/json","HTTP-Referer": "http://localhost:8501","X-Title": "Streamlit Improved Search Chat AI"}
     if not isinstance(chat_history_func, list): logging.error("Неверный формат истории для стриминга."); yield None; return
     payload = {"model": model_id_func, "messages": chat_history_func, "stream": True}; stream_successful = False
@@ -250,7 +256,6 @@ with chat_container:
         logging.warning(f"Попытка отобразить историю несуществующего чата: {active_chat_name}")
 
 # --- ВРЕМЕННЫЙ ПЛЕЙСХОЛДЕР ДЛЯ СТРИМИНГА ---
-# Он будет создан ниже, только когда идет генерация ответа
 streaming_placeholder = st.empty()
 
 # --- Поле ввода пользователя ---
@@ -259,17 +264,16 @@ if prompt := st.chat_input(f"Спроси {current_mode_name}..."):
         logging.info(f"Новый промпт в '{active_chat_name}'.")
         st.session_state.all_chats[active_chat_name].append({"role": "user", "content": prompt})
         save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
-        st.rerun() # Перезапуск для отображения промпта и запуска логики ответа
+        st.rerun()
     else:
         st.error("Ошибка: Активный чат не найден.", icon="❌")
         logging.error(f"Ошибка добавления сообщения: чат '{active_chat_name}' не найден.")
 
 
-# --- Логика ответа ИИ (с новым методом стриминга) ---
+# --- Логика ответа ИИ (с временным стримингом и rerun) ---
 if active_chat_name in st.session_state.all_chats:
     current_chat_state = st.session_state.all_chats[active_chat_name]
 
-    # Запускаем генерацию, если история не пуста и последнее сообщение от пользователя
     if current_chat_state and current_chat_state[-1]["role"] == "user":
 
         last_user_prompt = current_chat_state[-1]["content"]
@@ -320,83 +324,73 @@ if active_chat_name in st.session_state.all_chats:
 
         logging.info("Запрос и стриминг ответа ИИ во временный плейсхолдер...")
         try:
-            # Получаем генератор ответа
             response_generator = stream_ai_response(current_model_id, context_for_ai)
 
-            # Начинаем стримить во временный плейсхолдер
-            with streaming_placeholder.container(): # Используем контейнер внутри empty для стилизации
-                 # Добавляем иконку и текст ожидания
-                 st.markdown("💡 Ожидаю ответ...", unsafe_allow_html=True)
-                 temp_content_placeholder = st.empty() # Вложенный empty для самого текста
+            with streaming_placeholder.container():
+                 # Используем markdown для стилизации через CSS класс
+                 st.markdown('<div class="streaming-placeholder">💡 Ожидаю ответ...</div>', unsafe_allow_html=True)
+                 # Вложенный empty для обновления текста без перерисовки фона/иконки
+                 temp_content_placeholder = st.empty()
 
                  for chunk in response_generator:
-                      if chunk is None: # Сигнал об ошибке из генератора
+                      if chunk is None:
                            logging.error("Генератор стриминга вернул ошибку (None).")
                            ai_response_error = True
-                           st.error("Ошибка при получении ответа от ИИ!", icon="😔") # Показываем ошибку прямо здесь
+                           # Обновляем сообщение об ошибке прямо во временном блоке
+                           temp_content_placeholder.error("Ошибка при получении ответа от ИИ!", icon="😔")
                            break
                       if chunk:
                            full_response_chunks.append(chunk)
                            # Обновляем текст во вложенном плейсхолдере
-                           temp_content_placeholder.markdown("".join(full_response_chunks) + "▌", unsafe_allow_html=True)
+                           # Добавляем иконку ассистента перед текстом
+                           temp_content_placeholder.markdown("💡 " + "".join(full_response_chunks) + "▌", unsafe_allow_html=True)
 
-            # После завершения стриминга (успешного или с ошибкой)
+            # После завершения стриминга
             if not ai_response_error:
                 final_response_to_save = "".join(full_response_chunks)
                 if final_response_to_save:
                     logging.info("Ответ от ИИ успешно собран.")
                 else:
                     logging.warning("Ответ от ИИ пуст после стриминга.")
-                    st.warning("ИИ не предоставил ответ.", icon="🤷") # Сообщаем пользователю
-                    final_response_to_save = None # Не сохраняем пустой ответ
-
-            # Если была ошибка во время стриминга, сообщение уже выведено
+                    # Можно добавить сообщение в плейсхолдер, но он все равно очистится
+                    # temp_content_placeholder.warning("ИИ не предоставил ответ.", icon="🤷")
+                    final_response_to_save = None
 
         except Exception as e:
-             logging.error(f"Непредвиденная ошибка при стриминге во временный плейсхолдер: {e}", exc_info=True)
+             logging.error(f"Ошибка при стриминге во временный плейсхолдер: {e}", exc_info=True)
+             # Показываем ошибку в основном потоке, т.к. плейсхолдер может быть уже недоступен
              st.error(f"Произошла ошибка при обработке ответа ИИ: {e}", icon="💥")
              final_response_to_save = None
              ai_response_error = True
         finally:
-             # В любом случае очищаем временный плейсхолдер ПОСЛЕ всех операций с ним
+             # Очищаем временный плейсхолдер
              streaming_placeholder.empty()
              logging.info("Временный плейсхолдер очищен.")
 
 
         # === НОВЫЙ БЛОК: Сохранение и Перерисовка ===
-        # Сохраняем ответ и ПЕРЕРИСОВЫВАЕМ страницу, если ответ получен успешно
         if final_response_to_save and not ai_response_error:
             logging.info("Добавление ответа в историю и запрос на перерисовку...")
             try:
-                # Добавляем ПОЛНЫЙ ответ в историю
                 if active_chat_name in st.session_state.all_chats:
                      current_history_for_save = st.session_state.all_chats[active_chat_name]
-                     # Проверка на дублирование на всякий случай
                      if not current_history_for_save or current_history_for_save[-1].get("role") != "assistant" or current_history_for_save[-1].get("content") != final_response_to_save:
                           current_history_for_save.append({"role": "assistant", "content": final_response_to_save})
-                          # Сохраняем ИЗМЕНЕННУЮ историю
                           save_all_chats(st.session_state.all_chats, st.session_state.active_chat, st.session_state.web_search_enabled)
-                          logging.info("Ответ ассистента добавлен в session_state и сохранен.")
-                          # Запускаем ПЕРЕРИСОВКУ страницы, чтобы отобразить обновленную историю
-                          st.rerun()
+                          logging.info("Ответ ассистента добавлен и сохранен.")
+                          st.rerun() # Перерисовываем для отображения в основном чате
                      else:
-                          logging.warning("Обнаружено дублирование ответа ассистента при сохранении. Перерисовка не требуется.")
-
+                          logging.warning("Обнаружено дублирование ответа. Перерисовка не требуется.")
                 else:
-                     logging.error(f"Ошибка сохранения ответа: чат '{active_chat_name}' исчез.")
-                     st.error("Ошибка: не удалось сохранить ответ, чат не найден.", icon="❌")
-
+                     logging.error(f"Ошибка сохранения: чат '{active_chat_name}' не найден.")
+                     st.error("Ошибка: не удалось сохранить ответ.", icon="❌")
             except Exception as e:
-                 logging.error(f"Ошибка при сохранении и запросе rerun: {e}", exc_info=True)
-                 st.error(f"Ошибка при финальном обновлении чата: {e}", icon="💾")
+                 logging.error(f"Ошибка при сохранении/rerun: {e}", exc_info=True)
+                 st.error(f"Ошибка обновления чата: {e}", icon="💾")
 
         elif ai_response_error:
              logging.info("Ответ ИИ не сохранен из-за ошибки.")
-             # Сообщение об ошибке уже было показано во временном плейсхолдере
-
-        else: # Ответ пустой, но не было ошибки
+        else:
              logging.info("Пустой ответ от ИИ, не сохранено.")
-             # Предупреждение уже было показано
 
-        logging.info(f"--- Обработка ответа ИИ для чата '{active_chat_name}' завершена (этап до rerun) ---")
-        # Важно: если был вызван st.rerun(), код ниже этой точки в текущем запуске не выполнится
+        logging.info(f"--- Обработка ответа ИИ для '{active_chat_name}' завершена (этап до rerun) ---")
