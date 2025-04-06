@@ -41,7 +41,7 @@ st.markdown(
         margin-bottom: 10px;
         text-align: left;
     }
-    /* Кнопки, поля ввода и т.п. */
+    /* Стилизация элементов ввода и кнопок */
     .stTextArea textarea {
         background-color: #2a2a2a;
         color: #ffffff;
@@ -58,7 +58,6 @@ st.markdown(
     }
     .stButton button:hover {
         background-color: #5a5a5a;
-        color: #ffffff;
     }
     </style>
     """,
@@ -186,8 +185,9 @@ if submit_button and user_input:
     # Добавляем ответ AI в историю диалога
     st.session_state.conversation.append({"role": "ai", "content": ai_reply})
     
-    # Перезагружаем страницу для обновления отображения истории
-    st.experimental_rerun()
+    # Если функция experimental_rerun доступна, выполняем перезапуск приложения
+    if hasattr(st, "experimental_rerun"):
+        st.experimental_rerun()
 
 # ======= ОТОБРАЖЕНИЕ ПРОЦЕССА МЫШЛЕНИЯ AI (ПРИ НАЛИЧИИ) =======
 if "thinking" in locals() and thinking:
