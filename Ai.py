@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-from duckduckgo_search import ddg
+from duckduckgo_search import DDGS
 
 # Применяем кастомный CSS для улучшенного внешнего вида
 st.markdown("""
@@ -53,19 +53,20 @@ if 'conversation' not in st.session_state:
 
 def web_search(query):
     """
-    Выполняет веб поиск через DuckDuckGo и возвращает отформатированные результаты.
+    Выполняет веб-поиск через DuckDuckGo с использованием DDGS и возвращает результаты.
     """
     try:
-        results = ddg(query, max_results=3)
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=3))
         return results
     except Exception as e:
-        st.error(f"Ошибка веб поиска: {e}")
+        st.error(f"Ошибка веб-поиска: {e}")
         return None
 
 def call_ai_model(model, conversation):
     """
     Отправляет историю сообщений на API провайдера OpenRouter и возвращает ответ AI.
-    Предполагается, что API возвращает JSON с полями 'response' (ответ модели) 
+    Предполагается, что API возвращает JSON с полями 'response' (ответ модели)
     и 'thinking' (описание процесса мышления модели).
     """
     headers = {
@@ -76,7 +77,6 @@ def call_ai_model(model, conversation):
         "model": model,
         "messages": conversation,
         "temperature": 0.7
-        # Дополнительные параметры можно добавить по необходимости
     }
     try:
         response = requests.post(API_URL, headers=headers, json=payload)
@@ -99,7 +99,6 @@ with st.container():
         elif entry["role"] == "ai":
             st.markdown(f'<div class="ai-message"><b>AI:</b> {entry["content"]}</div>', unsafe_allow_html=True)
         elif entry["role"] == "system":
-            # Системные сообщения (например, результаты веб поиска)
             st.markdown(f'<div class="ai-message"><i>{entry["content"]}</i></div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -112,13 +111,14 @@ if submit_button and user_input:
     # Добавляем сообщение пользователя в историю диалога
     st.session_state.conversation.append({"role": "user", "content": user_input})
     
-    # Если включен веб поиск, выполняем его и добавляем результаты в историю как системное сообщение
+    # Если включён веб поиск, выполняем его и добавляем результаты в историю как системное сообщение
     if enable_web_search:
         st.info("Выполняется веб поиск...")
         search_results = web_search(user_input)
         if search_results:
-            search_context = "\n".join([f"{item.get('title', 'Без заголовка')}: {item.get('href', '')}" 
-                                        for item in search_results])
+            search_context = "\n".join(
+                [f"{item.get('title', 'Без заголовка')}: {item.get('href', '')}" for item in search_results]
+            )
             st.session_state.conversation.append({"role": "system", 
                                                   "content": f"Результаты веб поиска:\n{search_context}"})
     
@@ -126,7 +126,7 @@ if submit_button and user_input:
     with st.spinner("AI обрабатывает запрос..."):
         ai_reply, thinking = call_ai_model(model_choice, st.session_state.conversation)
     
-    # Добавляем ответ AI в историю
+    # Добавляем ответ AI в историю диалога
     st.session_state.conversation.append({"role": "ai", "content": ai_reply})
     
     # Перезагружаем страницу для обновления отображения истории
