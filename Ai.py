@@ -2,55 +2,99 @@ import streamlit as st
 import requests
 from duckduckgo_search import DDGS
 
-# Применяем кастомный CSS для улучшенного внешнего вида
-st.markdown("""
+# ======= СТИЛИЗАЦИЯ СТРАНИЦЫ (ТЁМНАЯ ТЕМА) =======
+st.markdown(
+    """
     <style>
+    /* Общие настройки фона и текста */
     body {
-        background-color: #f0f2f6;
+        background-color: #1e1e1e;
+        color: #ffffff;
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     }
+    /* Центрирование и ограничение ширины основного контейнера */
+    .main > div {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    /* Стили для боковой панели (sidebar) */
+    [data-testid="stSidebar"] {
+        background-color: #232323;
+    }
+    /* Стили для блоков чата */
     .chat-container {
         padding: 20px;
-        background-color: #ffffff;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         margin-bottom: 20px;
+        border-radius: 10px;
     }
     .user-message {
-        background-color: #DCF8C6;
+        background-color: #2a2a2a;
         padding: 10px;
         border-radius: 10px;
         margin-bottom: 10px;
         text-align: right;
     }
     .ai-message {
-        background-color: #E6E6FA;
+        background-color: #3a3a3a;
         padding: 10px;
         border-radius: 10px;
         margin-bottom: 10px;
         text-align: left;
     }
+    /* Кнопки, поля ввода и т.п. */
+    .stTextArea textarea {
+        background-color: #2a2a2a;
+        color: #ffffff;
+    }
+    .stTextArea label {
+        color: #ffffff;
+    }
+    .stButton button {
+        background-color: #4a4a4a;
+        color: #ffffff;
+        border: none;
+        border-radius: 5px;
+        padding: 0.6rem 1rem;
+    }
+    .stButton button:hover {
+        background-color: #5a5a5a;
+        color: #ffffff;
+    }
     </style>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
-# Заголовок и вводная информация
+# ======= ЗАГОЛОВОК ПРИЛОЖЕНИЯ =======
 st.title("Образовательный AI помощник")
-st.markdown("Добро пожаловать! Этот чат-помощник поможет вам разобраться в школьных темах с подробными и доступными объяснениями.")
+st.markdown(
+    "Добро пожаловать! Этот чат-помощник поможет вам разобраться в школьных темах "
+    "с подробными и доступными объяснениями."
+)
 
-# Настройки в боковой панели
+# ======= НАСТРОЙКИ В БОКОВОЙ ПАНЕЛИ =======
 st.sidebar.header("Настройки модели")
-model_choice = st.sidebar.selectbox("Выберите модель", 
-                                    ["deepseek-chat-v3-0324:free", "deepseek-r1:free"])
+
+# Маппинг названий для реального API
+model_mapping = {
+    "v3": "deepseek-chat-v3-0324:free",
+    "r1": "deepseek-r1:free"
+}
+
+model_key = st.sidebar.selectbox("Выберите модель", ["v3", "r1"])
+model_choice = model_mapping[model_key]
+
 enable_web_search = st.sidebar.checkbox("Включить автоматический веб поиск", value=False)
 
-# Параметры API
+# ======= ПАРАМЕТРЫ API =======
 API_KEY = "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"
-API_URL = "https://api.openrouter.ai/v1/chat/completions"  # Предположительный URL
+API_URL = "https://api.openrouter.ai/v1/chat/completions"  # Уточните реальный URL при необходимости
 
-# Инициализация истории диалога в session_state
+# ======= ИНИЦИАЛИЗАЦИЯ ИСТОРИИ ДИАЛОГА =======
 if 'conversation' not in st.session_state:
     st.session_state.conversation = []
 
+# ======= ФУНКЦИИ =======
 def web_search(query):
     """
     Выполняет веб-поиск через DuckDuckGo с использованием DDGS и возвращает результаты.
@@ -90,19 +134,29 @@ def call_ai_model(model, conversation):
     except Exception as e:
         return f"Ошибка запроса: {e}", ""
 
-# Отображение истории чата
-with st.container():
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-    for entry in st.session_state.conversation:
-        if entry["role"] == "user":
-            st.markdown(f'<div class="user-message"><b>Вы:</b> {entry["content"]}</div>', unsafe_allow_html=True)
-        elif entry["role"] == "ai":
-            st.markdown(f'<div class="ai-message"><b>AI:</b> {entry["content"]}</div>', unsafe_allow_html=True)
-        elif entry["role"] == "system":
-            st.markdown(f'<div class="ai-message"><i>{entry["content"]}</i></div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+# ======= ОТОБРАЖЕНИЕ ИСТОРИИ ЧАТА =======
+st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
-# Форма для ввода нового сообщения
+for entry in st.session_state.conversation:
+    if entry["role"] == "user":
+        st.markdown(
+            f'<div class="user-message"><b>Вы:</b> {entry["content"]}</div>',
+            unsafe_allow_html=True
+        )
+    elif entry["role"] == "ai":
+        st.markdown(
+            f'<div class="ai-message"><b>AI:</b> {entry["content"]}</div>',
+            unsafe_allow_html=True
+        )
+    elif entry["role"] == "system":
+        st.markdown(
+            f'<div class="ai-message"><i>{entry["content"]}</i></div>',
+            unsafe_allow_html=True
+        )
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ======= ФОРМА ДЛЯ ВВОДА СООБЩЕНИЯ =======
 with st.form(key="chat_form", clear_on_submit=True):
     user_input = st.text_area("Ваше сообщение", height=100)
     submit_button = st.form_submit_button(label="Отправить")
@@ -111,16 +165,19 @@ if submit_button and user_input:
     # Добавляем сообщение пользователя в историю диалога
     st.session_state.conversation.append({"role": "user", "content": user_input})
     
-    # Если включён веб поиск, выполняем его и добавляем результаты в историю как системное сообщение
+    # Если включён веб-поиск, выполняем его и добавляем результаты в историю как системное сообщение
     if enable_web_search:
-        st.info("Выполняется веб поиск...")
+        st.info("Выполняется веб-поиск...")
         search_results = web_search(user_input)
         if search_results:
+            # Формируем контекст из результатов
             search_context = "\n".join(
                 [f"{item.get('title', 'Без заголовка')}: {item.get('href', '')}" for item in search_results]
             )
-            st.session_state.conversation.append({"role": "system", 
-                                                  "content": f"Результаты веб поиска:\n{search_context}"})
+            st.session_state.conversation.append({
+                "role": "system", 
+                "content": f"Результаты веб-поиска:\n{search_context}"
+            })
     
     # Вызов AI модели
     with st.spinner("AI обрабатывает запрос..."):
@@ -132,7 +189,7 @@ if submit_button and user_input:
     # Перезагружаем страницу для обновления отображения истории
     st.experimental_rerun()
 
-# Отображение процесса мышления AI, если такая информация возвращается API
+# ======= ОТОБРАЖЕНИЕ ПРОЦЕССА МЫШЛЕНИЯ AI (ПРИ НАЛИЧИИ) =======
 if "thinking" in locals() and thinking:
     st.markdown("### Процесс мышления AI")
     st.markdown(thinking)
